@@ -24,9 +24,10 @@ export function FurnitureItem({ item, onSelect, isSelected, onUpdatePosition, is
           disableRotation={true}
           axisColors={isColliding ? ['#ef4444', '#ef4444', '#ef4444'] : ['#6366f1', '#10b981', '#06b6d4']}
           onDrag={(matrix) => {
-            const posX = matrix.elements[12];
-            const posZ = matrix.elements[14];
-            onUpdatePosition(item.id, posX, posZ);
+            // Extract exact translation vector relative to the item's origin
+            const deltaX = matrix.elements[12];
+            const deltaZ = matrix.elements[14];
+            onUpdatePosition(item.id, item.x + deltaX, item.z + deltaZ);
           }}
         >
           <group 

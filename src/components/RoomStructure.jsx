@@ -1,12 +1,12 @@
 import React, { useMemo } from 'react';
 import * as THREE from 'three';
 
-export function RoomStructure({ room, gridSize = 0.25 }) {
+export function RoomStructure({ room, gridSize = 0.25, showRoomGrid = false }) {
   const wallHeight = 2.4;
   const wallThickness = 0.12;
   const { width, length, hasWindow, windowWidth = 1.6, windowHeight = 1.2 } = room;
 
-  // Generate procedural plank groove lines for realistic wood flooring detail
+  // Generate wood floor planks
   const plankGrooves = useMemo(() => {
     const lines = [];
     const plankWidth = 0.2;
@@ -26,6 +26,44 @@ export function RoomStructure({ room, gridSize = 0.25 }) {
     return lines;
   }, [width, length]);
 
+  // Generate precise square grid lines for snapping
+  const squareGridLines = useMemo(() => {
+    if (!showRoomGrid) return null;
+    const lines = [];
+    const step = gridSize;
+
+    // Lines parallel to Z axis
+    for (let x = -width / 2; x <= width / 2; x += step) {
+      lines.push(
+        <lineSegments key={`grid-x-${x}`}>
+          <bufferGeometry>
+            <bufferAttribute
+              attach="attributes-position"
+              args={[new Float32Array([x, 0.008, -length / 2, x, 0.008, length / 2]), 3]}
+            />
+          </bufferGeometry>
+          <lineBasicMaterial color="#38bdf8" transparent opacity={0.3} />
+        </lineSegments>
+      );
+    }
+
+    // Lines parallel to X axis
+    for (let z = -length / 2; z <= length / 2; z += step) {
+      lines.push(
+        <lineSegments key={`grid-z-${z}`}>
+          <bufferGeometry>
+            <bufferAttribute
+              attach="attributes-position"
+              args={[new Float32Array([-width / 2, 0.008, z, width / 2, 0.008, z]), 3]}
+            />
+          </bufferGeometry>
+          <lineBasicMaterial color="#38bdf8" transparent opacity={0.3} />
+        </lineSegments>
+      );
+    }
+    return lines;
+  }, [width, length, gridSize, showRoomGrid]);
+
   return (
     <group>
       {/* Rich Darker Hardwood Floor Base */}
@@ -42,13 +80,8 @@ export function RoomStructure({ room, gridSize = 0.25 }) {
       {/* Individual Plank Line Details */}
       {plankGrooves}
 
-      {/* Dynamic Visual Snapping Grid Overlay */}
-      <gridHelper 
-        args={[Math.max(width, length), Math.max(width, length) / gridSize, '#38bdf8', '#334155']} 
-        position={[0, 0.008, 0]} 
-        material-transparent={true}
-        material-opacity={0.35}
-      />
+      {/* Square Snapping Grid Overlay */}
+      {squareGridLines}
 
       {/* Baseboard Rim */}
       <mesh position={[0, -0.05, 0]}>
@@ -84,6 +117,7 @@ export function RoomStructure({ room, gridSize = 0.25 }) {
             </mesh>
 
             {/* Window Frame */}
+            <mesh position={[0, 0, 0]></mesh>
             <mesh position={[0, 0, 0]}>
               <boxGeometry args={[windowWidth + 0.04, windowHeight + 0.04, 0.06]} />
               <meshStandardMaterial color="#0f172a" roughness={0.4} />

@@ -1,10 +1,10 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { Canvas } from '@react-three/fiber';
 import { OrbitControls, Grid, ContactShadows, Environment } from '@react-three/drei';
 import { 
   Box, Maximize2, Trash2, Sparkles, 
   RotateCw, AlertTriangle, 
-  FolderPlus, Edit3, ArrowLeft, ShieldCheck, Copy, Sliders, CheckSquare, Square, Lock, X
+  FolderPlus, Edit3, ArrowLeft, ShieldCheck, Copy, Sliders, CheckSquare, Square, Lock, X, Save
 } from 'lucide-react';
 
 import { RoomStructure } from './components/RoomStructure';
@@ -76,12 +76,14 @@ export default function App() {
   const [devPasswordInput, setDevPasswordInput] = useState('');
   const [devModalError, setDevModalError] = useState(false);
 
+  // Custom alert modal state replacing browser alerts
+  const [customAlertMessage, setCustomAlertMessage] = useState(null);
+
   const [editorSettings, setEditorSettings] = useState({
     snapToGrid: true,
     gridSize: 0.25,
-    showGridLines: true,
-    shadowsEnabled: true,
-    wireframeMode: false
+    showRoomGrid: false,
+    shadowsEnabled: true
   });
 
   const handleDeveloperLogin = (e) => {
@@ -92,6 +94,7 @@ export default function App() {
       setShowDevModal(false);
       setDevPasswordInput('');
       setDevModalError(false);
+      setCustomAlertMessage('Developer mode activated successfully!');
     } else {
       setDevModalError(true);
     }
@@ -100,10 +103,10 @@ export default function App() {
   const deactivateDeveloperMode = () => {
     setIsDeveloperMode(false);
     localStorage.removeItem('spacecraft_secure_dev');
-    alert('Developer mode deactivated successfully.');
+    setCustomAlertMessage('Developer mode deactivated successfully.');
   };
 
-  const [showcaseRooms, setShowcaseRooms] = useState([
+  const initialShowcaseRooms = [
     {
       id: 'show-living',
       title: 'Living Room',
@@ -150,7 +153,15 @@ export default function App() {
         { id: 28, type: 'barStool', name: 'Bar High Stool 3', x: 0.8, z: 0.85, rotation: 180 }
       ]
     }
-  ]);
+  ];
+
+  const [showcaseRooms, setShowcaseRooms] = useState(() => {
+    const saved = localStorage.getItem('spacecraft_saved_showcases');
+    if (saved) {
+      try { return JSON.parse(saved); } catch (e) { return initialShowcaseRooms; }
+    }
+    return initialShowcaseRooms;
+  });
 
   const [userRooms, setUserRooms] = useState([
     {
@@ -238,15 +249,14 @@ export default function App() {
     setSelectedIds([newItem.id]);
   };
 
-  // Fixed absolute position update with grid snapping
-  const updatePosition = (id, absoluteX, absoluteZ) => {
-    let finalX = absoluteX;
-    let finalZ = absoluteZ;
+  const updatePosition = (id, targetX, targetZ) => {
+    let finalX = targetX;
+    let finalZ = targetZ;
 
     if (editorSettings.snapToGrid) {
       const step = editorSettings.gridSize;
-      finalX = Math.round(absoluteX / step) * step;
-      finalZ = Math.round(absoluteZ / step) * step;
+      finalX = Math.round(targetX / step) * step;
+      finalZ = Math.round(targetZ / step) * step;
     }
 
     const updated = activeRoom.furniture.map(item => item.id === id ? { ...item, x: finalX, z: finalZ } : item);
@@ -270,10 +280,15 @@ export default function App() {
     setSelectedIds([]);
   };
 
+  const saveShowcaseLocally = () => {
+    localStorage.setItem('spacecraft_saved_showcases', JSON.stringify(showcaseRooms));
+    setCustomAlertMessage('Showcase rooms saved to browser storage successfully!');
+  };
+
   const exportShowcaseJson = () => {
     const jsonString = JSON.stringify(showcaseRooms, null, 2);
     navigator.clipboard.writeText(jsonString);
-    alert('Showcase room configuration copied to clipboard!');
+    setCustomAlertMessage('Showcase room configuration copied to clipboard!');
   };
 
   return (
@@ -337,6 +352,19 @@ export default function App() {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Custom Alert Modal */}
+      {customAlertMessage && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
+          <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6 w-full max-w-sm shadow-2xl space-y-4 text-center">
+            <h3 className="text-base font-bold text-white">Notification</h3>
+            <p className="text-xs text-slate-300">{customAlertMessage}</p>
+            <button onClick={() => setCustomAlertMessage(null)} className="w-full bg-indigo-600 hover:bg-indigo-500 text-white py-2.5 rounded-xl text-xs font-semibold transition shadow-lg">
+              OK
+            </button>
           </div>
         </div>
       )}
@@ -406,9 +434,14 @@ export default function App() {
                     </div>
                   )}
 
-                  <button onClick={exportShowcaseJson} className="w-full bg-amber-600 hover:bg-amber-500 text-white py-2.5 rounded-xl text-xs font-semibold flex items-center justify-center gap-2 transition shadow-lg">
-                    <Copy className="w-3.5 h-3.5" /> Export Room to Code
-                  </button>
+                  <div className="space-y-2 pt-2 border-t border-slate-800">
+                    <button onClick={saveShowcaseLocally} className="w-full bg-emerald-600 hover:bg-emerald-500 text-white py-2.5 rounded-xl text-xs font-semibold flex items-center justify-center gap-2 transition shadow-lg">
+                      <Save className="w-3.5 h-3.5" /> Save to Browser Memory
+                    </button>
+                    <button onClick={exportShowcaseJson} className="w-full bg-amber-600 hover:bg-amber-500 text-white py-2.5 rounded-xl text-xs font-semibold flex items-center justify-center gap-2 transition shadow-lg">
+                      <Copy className="w-3.5 h-3.5" /> Export Room to Code
+                    </button>
+                  </div>
                 </div>
               )}
 
@@ -422,7 +455,13 @@ export default function App() {
                   <ambientLight intensity={0.7} />
                   <directionalLight position={[5, 8, 5]} intensity={1.2} castShadow={editorSettings.shadowsEnabled} shadow-bias={-0.0001} />
                   <Environment preset="apartment" />
-                  <RoomStructure room={activeShowcase} gridSize={editorSettings.gridSize} />
+                  
+                  {/* Always-on global background grid */}
+                  <Grid position={[0, 0.001, 0]} args={[12, 12]} cellSize={0.5} cellThickness={0.8} cellColor="#94a3b8" sectionSize={1} sectionThickness={1.2} sectionColor="#64748b" />
+                  
+                  {/* Room structure with optional square grid */}
+                  <RoomStructure room={activeShowcase} gridSize={editorSettings.gridSize} showRoomGrid={editorSettings.showRoomGrid} />
+
                   {activeShowcase.furniture.map(item => (
                     <FurnitureItem 
                       key={item.id} 
@@ -474,6 +513,14 @@ export default function App() {
                       </div>
                     )}
 
+                    <div className="flex items-center justify-between cursor-pointer pt-2 border-t border-slate-800/80" onClick={() => setEditorSettings(s => ({ ...s, showRoomGrid: !s.showRoomGrid }))}>
+                      <div>
+                        <span className="text-xs font-semibold text-slate-200 block">Show Room Square Grid</span>
+                        <span className="text-[9px] text-slate-400 block">Overlay square grid on hardwood floor</span>
+                      </div>
+                      {editorSettings.showRoomGrid ? <CheckSquare className="w-4 h-4 text-cyan-400" /> : <Square className="w-4 h-4 text-slate-600" />}
+                    </div>
+
                     <div className="flex items-center justify-between cursor-pointer pt-2 border-t border-slate-800/80" onClick={() => setEditorSettings(s => ({ ...s, shadowsEnabled: !s.shadowsEnabled }))}>
                       <span className="text-xs font-semibold text-slate-200">Real-time Shadows</span>
                       {editorSettings.shadowsEnabled ? <CheckSquare className="w-4 h-4 text-cyan-400" /> : <Square className="w-4 h-4 text-slate-600" />}
@@ -514,7 +561,8 @@ export default function App() {
                   <Canvas camera={{ position: [0, 4, 6], fov: 45 }}>
                     <ambientLight intensity={0.7} />
                     <directionalLight position={[5, 8, 5]} intensity={1} />
-                    <RoomStructure room={room} gridSize={0.25} />
+                    <Grid position={[0, 0.001, 0]} args={[12, 12]} cellSize={0.5} cellThickness={0.8} cellColor="#94a3b8" sectionSize={1} sectionThickness={1.2} sectionColor="#64748b" />
+                    <RoomStructure room={room} gridSize={0.25} showRoomGrid={false} />
                     {room.furniture.map(item => (<FurnitureItem key={item.id} item={item} isReadOnly={true} />))}
                     <OrbitControls makeDefault enableZoom={false} maxPolarAngle={Math.PI / 2 - 0.05} />
                   </Canvas>
@@ -615,7 +663,8 @@ export default function App() {
                   <Environment preset="apartment" />
                   <ContactShadows position={[0, 0.01, 0]} opacity={0.6} scale={12} blur={1.5} far={4} />
 
-                  <RoomStructure room={activeRoom} gridSize={editorSettings.gridSize} />
+                  <Grid position={[0, 0.001, 0]} args={[12, 12]} cellSize={0.5} cellThickness={0.8} cellColor="#94a3b8" sectionSize={1} sectionThickness={1.2} sectionColor="#64748b" />
+                  <RoomStructure room={activeRoom} gridSize={editorSettings.gridSize} showRoomGrid={editorSettings.showRoomGrid} />
 
                   {activeRoom.furniture.map(item => (
                     <FurnitureItem 
@@ -667,6 +716,11 @@ export default function App() {
                       </div>
                     </div>
                   )}
+
+                  <div className="flex items-center justify-between cursor-pointer pt-2 border-t border-slate-800/80" onClick={() => setEditorSettings(s => ({ ...s, showRoomGrid: !s.showRoomGrid }))}>
+                    <span className="text-xs font-semibold text-slate-200">Show Room Square Grid</span>
+                    {editorSettings.showRoomGrid ? <CheckSquare className="w-4 h-4 text-cyan-400" /> : <Square className="w-4 h-4 text-slate-600" />}
+                  </div>
 
                   <div className="flex items-center justify-between cursor-pointer pt-2 border-t border-slate-800/80" onClick={() => setEditorSettings(s => ({ ...s, shadowsEnabled: !s.shadowsEnabled }))}>
                     <span className="text-xs font-semibold text-slate-200">Real-time Shadows</span>
