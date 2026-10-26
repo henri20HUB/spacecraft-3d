@@ -1,10 +1,10 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { Canvas } from '@react-three/fiber';
 import { OrbitControls, Grid, ContactShadows, Environment } from '@react-three/drei';
 import { 
   Box, Maximize2, Trash2, Sparkles, 
   RotateCw, AlertTriangle, 
-  FolderPlus, Edit3, ArrowLeft
+  FolderPlus, Edit3, ArrowLeft, ShieldCheck, Save, Copy
 } from 'lucide-react';
 
 import { RoomStructure } from './components/RoomStructure';
@@ -60,8 +60,21 @@ function isOutOfBounds(item, room) {
 export default function App() {
   const [viewMode, setViewMode] = useState('home');
   const [showcaseIndex, setShowcaseIndex] = useState(0);
+  const [isDeveloperMode, setIsDeveloperMode] = useState(false);
 
-  const showcaseRooms = [
+  // Enable developer mode check on mount
+  useEffect(() => {
+    const devFlag = localStorage.getItem('spacecraft_dev_mode');
+    if (devFlag === 'true') setIsDeveloperMode(true);
+  }, []);
+
+  const toggleDeveloperMode = () => {
+    const nextState = !isDeveloperMode;
+    setIsDeveloperMode(nextState);
+    localStorage.setItem('spacecraft_dev_mode', nextState ? 'true' : 'false');
+  };
+
+  const [showcaseRooms, setShowcaseRooms] = useState([
     {
       id: 'show-living',
       title: 'Living Room',
@@ -97,20 +110,18 @@ export default function App() {
       title: 'Kitchen',
       width: 5.2, length: 5.5, hasWindow: true, windowWidth: 1.8,
       furniture: [
-        // Cleanly spaced back wall appliances with zero collision
         { id: 20, type: 'kitchen', name: 'Fitted Counter', x: -1.6, z: -2.1, rotation: 0 },
         { id: 21, type: 'oven', name: 'Oven Range', x: -0.4, z: -2.1, rotation: 0 },
         { id: 22, type: 'dishwasher', name: 'Dishwasher', x: 0.6, z: -2.1, rotation: 0 },
         { id: 23, type: 'kitchenSink', name: 'Sink Counter', x: 1.8, z: -2.1, rotation: 0 },
         { id: 24, type: 'wallCabinet', name: 'Upper Wall Cabinets', x: -0.4, z: -2.2, rotation: 0 },
-        // Center Island Bar & Stools
         { id: 25, type: 'kitchen', name: 'Center Island Bar', x: 0, z: 0.1, rotation: 0 },
         { id: 26, type: 'barStool', name: 'Bar High Stool 1', x: -0.8, z: 0.85, rotation: 180 },
         { id: 27, type: 'barStool', name: 'Bar High Stool 2', x: 0, z: 0.85, rotation: 180 },
         { id: 28, type: 'barStool', name: 'Bar High Stool 3', x: 0.8, z: 0.85, rotation: 180 }
       ]
     }
-  ];
+  ]);
 
   const [userRooms, setUserRooms] = useState([
     {
@@ -127,10 +138,14 @@ export default function App() {
   const [activeRoomId, setActiveRoomId] = useState(null);
   const [selectedIds, setSelectedIds] = useState([]);
 
-  const activeRoom = userRooms.find(r => r.id === activeRoomId) || userRooms[0];
+  // Determine active room based on view mode
   const activeShowcase = showcaseRooms[showcaseIndex];
+  const activeRoom = viewMode === 'editor' 
+    ? (userRooms.find(r => r.id === activeRoomId) || userRooms[0])
+    : activeShowcase;
 
   const handleSelect = (id, isShiftPressed) => {
+    if (viewMode === 'home' && !isDeveloperMode) return; // Users cannot select/edit in showcase mode
     if (isShiftPressed) {
       if (selectedIds.includes(id)) {
         setSelectedIds(selectedIds.filter(i => i !== id));
@@ -182,7 +197,12 @@ export default function App() {
   };
 
   const updateActiveRoom = (updatedFields) => {
-    setUserRooms(userRooms.map(r => r.id === activeRoom.id ? { ...r, ...updatedFields } : r));
+    if (viewMode === 'home') {
+      // Update active showcase room directly as developer
+      setShowcaseRooms(showcaseRooms.map((room, idx) => idx === showcaseIndex ? { ...room, ...updatedFields } : room));
+    } else {
+      setUserRooms(userRooms.map(r => r.id === activeRoom.id ? { ...r, ...updatedFields } : r));
+    }
   };
 
   const addFurniture = (type) => {
@@ -213,6 +233,12 @@ export default function App() {
     setSelectedIds([]);
   };
 
+  const exportShowcaseJson = () => {
+    const jsonString = JSON.stringify(showcaseRooms, null, 2);
+    navigator.clipboard.writeText(jsonString);
+    alert('Showcase room configuration copied to clipboard! You can now paste it directly into your code if needed.');
+  };
+
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100 font-sans antialiased selection:bg-indigo-500 selection:text-white">
       
@@ -223,7 +249,10 @@ export default function App() {
             <div className="w-10 h-10 rounded-2xl bg-gradient-to-tr from-indigo-500 to-cyan-400 flex items-center justify-center shadow-lg shadow-indigo-500/20">
               <Box className="w-5 h-5 text-white" />
             </div>
-            <div><span className="text-xl font-bold tracking-tight text-white">SpaceCraft<span className="text-cyan-400">.3D</span></span></div>
+            <div>
+              <span className="text-xl font-bold tracking-tight text-white">SpaceCraft<span className="text-cyan-400">.3D</span></span>
+              {isDeveloperMode && <span className="ml-2 px-2 py-0.5 rounded bg-amber-500/20 border border-amber-500/40 text-[10px] text-amber-300 font-bold uppercase">Dev Mode Active</span>}
+            </div>
           </div>
           <nav className="flex items-center gap-4 text-xs font-semibold">
             <button onClick={() => setViewMode('home')} className={`px-4 py-2 rounded-xl transition ${viewMode === 'home' ? 'bg-indigo-600 text-white' : 'text-slate-400 hover:text-white'}`}>Showcase Home</button>
@@ -232,7 +261,7 @@ export default function App() {
         </div>
       </header>
 
-      {/* 1. HOME PAGE */}
+      {/* 1. HOME / SHOWCASE PAGE */}
       {viewMode === 'home' && (
         <main className="max-w-7xl mx-auto px-6 py-12 space-y-12">
           <div className="text-center max-w-3xl mx-auto">
@@ -249,28 +278,88 @@ export default function App() {
 
           <div className="bg-slate-900/60 border border-slate-800 rounded-3xl p-6 shadow-2xl backdrop-blur-xl">
             <div className="flex flex-col sm:flex-row items-center justify-between gap-4 mb-6">
-              <h3 className="text-xl font-bold text-white">{activeShowcase.title} Concept</h3>
+              <div className="flex items-center gap-3">
+                <h3 className="text-xl font-bold text-white">{activeShowcase.title} Concept</h3>
+                {isDeveloperMode && (
+                  <span className="text-[11px] text-amber-400 bg-amber-500/10 border border-amber-500/30 px-2.5 py-1 rounded-lg flex items-center gap-1">
+                    <ShieldCheck className="w-3.5 h-3.5" /> Editing Enabled (Developer)
+                  </span>
+                )}
+              </div>
               <div className="flex items-center gap-2 bg-slate-950 p-1.5 rounded-2xl border border-slate-800">
                 {showcaseRooms.map((room, idx) => (
-                  <button key={room.id} onClick={() => setShowcaseIndex(idx)} className={`px-5 py-2 rounded-xl text-xs font-semibold transition ${showcaseIndex === idx ? 'bg-indigo-600 text-white shadow-md' : 'text-slate-400 hover:text-white'}`}>
+                  <button key={room.id} onClick={() => { setShowcaseIndex(idx); setSelectedIds([]); }} className={`px-5 py-2 rounded-xl text-xs font-semibold transition ${showcaseIndex === idx ? 'bg-indigo-600 text-white shadow-md' : 'text-slate-400 hover:text-white'}`}>
                     {room.title}
                   </button>
                 ))}
               </div>
             </div>
 
-            <div className="h-[520px] w-full bg-slate-950 border border-slate-800 rounded-2xl overflow-hidden relative">
-              <Canvas shadows camera={{ position: [0, 5, 7], fov: 45 }}>
-                <ambientLight intensity={0.7} />
-                <directionalLight position={[5, 8, 5]} intensity={1.2} castShadow shadow-bias={-0.0001} />
-                <Environment preset="apartment" />
-                <RoomStructure room={activeShowcase} />
-                <Grid position={[0, 0.001, 0]} args={[12, 12]} cellSize={0.5} cellThickness={0.8} cellColor="#94a3b8" sectionSize={1} sectionThickness={1.2} sectionColor="#64748b" />
-                {activeShowcase.furniture.map(item => (
-                  <FurnitureItem key={item.id} item={item} isReadOnly={true} />
-                ))}
-                <OrbitControls makeDefault minDistance={4} maxDistance={10} maxPolarAngle={Math.PI / 2 - 0.05} />
-              </Canvas>
+            <div className="flex flex-col lg:flex-row gap-6">
+              {/* Developer Toolbar (Only visible when Dev Mode is active on Showcase) */}
+              {isDeveloperMode && (
+                <div className="w-full lg:w-80 bg-slate-950 border border-amber-500/30 rounded-2xl p-5 space-y-4">
+                  <div className="flex items-center gap-2 text-amber-400 font-bold text-xs uppercase">
+                    <ShieldCheck className="w-4 h-4" /> Developer Showcase Tools
+                  </div>
+                  <p className="text-[11px] text-slate-400 leading-relaxed">
+                    You are in Developer Mode. Click any furniture piece in the preview window to move or rotate it using the exact user studio tools.
+                  </p>
+
+                  <div className="space-y-2">
+                    <span className="text-xs font-semibold text-cyan-400 block">Add Item to Showcase</span>
+                    <div className="grid grid-cols-2 gap-2">
+                      <button onClick={() => addFurniture('sofa')} className="p-2 bg-slate-900 hover:bg-slate-850 rounded-xl text-xs text-slate-200">Sofa</button>
+                      <button onClick={() => addFurniture('tisch')} className="p-2 bg-slate-900 hover:bg-slate-850 rounded-xl text-xs text-slate-200">Table</button>
+                      <button onClick={() => addFurniture('chair')} className="p-2 bg-slate-900 hover:bg-slate-850 rounded-xl text-xs text-slate-200">Armchair</button>
+                      <button onClick={() => addFurniture('barStool')} className="p-2 bg-slate-900 hover:bg-slate-850 rounded-xl text-xs text-slate-200">Bar Stool</button>
+                      <button onClick={() => addFurniture('poster')} className="p-2 bg-slate-900 hover:bg-slate-850 rounded-xl text-xs text-slate-200">Wall Art</button>
+                    </div>
+                  </div>
+
+                  {selectedIds.length > 0 && (
+                    <div className="space-y-2 pt-2 border-t border-slate-800">
+                      <button onClick={rotateSelected} className="w-full bg-slate-900 hover:bg-slate-800 text-slate-200 border border-slate-800 py-2 rounded-xl text-xs font-semibold flex items-center justify-center gap-1.5">
+                        <RotateCw className="w-3.5 h-3.5 text-cyan-400" /> Snap Rotate 45°
+                      </button>
+                      <button onClick={deleteSelected} className="w-full bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-900/30 py-2 rounded-xl text-xs font-semibold flex items-center justify-center gap-1.5">
+                        <Trash2 className="w-3.5 h-3.5" /> Remove Selected
+                      </button>
+                    </div>
+                  )}
+
+                  <button onClick={exportShowcaseJson} className="w-full bg-amber-600 hover:bg-amber-500 text-white py-2.5 rounded-xl text-xs font-semibold flex items-center justify-center gap-2 transition shadow-lg">
+                    <Copy className="w-3.5 h-3.5" /> Export Room to Code
+                  </button>
+                </div>
+              )}
+
+              {/* Viewport Canvas */}
+              <div className="flex-1 h-[520px] w-full bg-slate-950 border border-slate-800 rounded-2xl overflow-hidden relative">
+                <Canvas 
+                  shadows 
+                  camera={{ position: [0, 5, 7], fov: 45 }}
+                  onPointerMissed={() => setSelectedIds([])}
+                >
+                  <ambientLight intensity={0.7} />
+                  <directionalLight position={[5, 8, 5]} intensity={1.2} castShadow shadow-bias={-0.0001} />
+                  <Environment preset="apartment" />
+                  <RoomStructure room={activeShowcase} />
+                  <Grid position={[0, 0.001, 0]} args={[12, 12]} cellSize={0.5} cellThickness={0.8} cellColor="#94a3b8" sectionSize={1} sectionThickness={1.2} sectionColor="#64748b" />
+                  {activeShowcase.furniture.map(item => (
+                    <FurnitureItem 
+                      key={item.id} 
+                      item={item} 
+                      onSelect={handleSelect} 
+                      isSelected={isDeveloperMode && selectedIds.includes(item.id)} 
+                      onUpdatePosition={updatePosition}
+                      isColliding={collidingIds.has(item.id)}
+                      isReadOnly={!isDeveloperMode}
+                    />
+                  ))}
+                  <OrbitControls makeDefault minDistance={4} maxDistance={10} maxPolarAngle={Math.PI / 2 - 0.05} />
+                </Canvas>
+              </div>
             </div>
 
             <div className="mt-6 flex justify-center">
@@ -280,7 +369,7 @@ export default function App() {
                 setActiveRoomId(cloned.id);
                 setViewMode('editor');
               }} className="bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold px-6 py-3 rounded-xl transition shadow-lg flex items-center gap-2">
-                <Edit3 className="w-4 h-4" /> Customize This Room
+                <Edit3 className="w-4 h-4" /> Customize This Room in Workspace
               </button>
             </div>
           </div>
@@ -428,8 +517,16 @@ export default function App() {
         </main>
       )}
 
-      <footer className="border-t border-slate-900 py-10 px-6 text-center text-xs text-slate-500 mt-16">
+      {/* Footer with Secret Developer Toggle */}
+      <footer className="border-t border-slate-900 py-10 px-6 text-center text-xs text-slate-500 mt-16 flex flex-col sm:flex-row items-center justify-center gap-4">
         <p>© 2026 SpaceCraft 3D. Precision Architectural Studio.</p>
+        <button 
+          onClick={toggleDeveloperMode} 
+          className="px-3 py-1 rounded-lg bg-slate-900 border border-slate-800 text-[11px] text-slate-400 hover:text-white transition flex items-center gap-1.5"
+        >
+          <ShieldCheck className="w-3.5 h-3.5 text-amber-400" />
+          {isDeveloperMode ? 'Disable Developer Mode' : 'Enable Developer Mode'}
+        </button>
       </footer>
 
     </div>
