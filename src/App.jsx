@@ -4,7 +4,7 @@ import { OrbitControls, Grid, ContactShadows, Environment } from '@react-three/d
 import { 
   Box, Maximize2, Trash2, Sparkles, 
   RotateCw, AlertTriangle, 
-  FolderPlus, Edit3, ArrowLeft, ShieldCheck, Copy, Sliders, CheckSquare, Square, Lock, X, Save
+  FolderPlus, Edit3, ArrowLeft, ShieldCheck, Copy, Sliders, CheckSquare, Square, Lock, X, Save, Check
 } from 'lucide-react';
 
 import { RoomStructure } from './components/RoomStructure';
@@ -72,11 +72,14 @@ export default function App() {
     return localStorage.getItem('spacecraft_secure_dev') === 'true';
   });
 
+  // Custom Modals State
   const [showDevModal, setShowDevModal] = useState(false);
   const [devPasswordInput, setDevPasswordInput] = useState('');
   const [devModalError, setDevModalError] = useState(false);
 
-  // Custom alert modal state replacing browser alerts
+  const [showDeactivateModal, setShowDeactivateModal] = useState(false);
+  const [showExportModal, setShowExportModal] = useState(false);
+  const [exportedCodeString, setExportedCodeString] = useState('');
   const [customAlertMessage, setCustomAlertMessage] = useState(null);
 
   const [editorSettings, setEditorSettings] = useState({
@@ -100,9 +103,10 @@ export default function App() {
     }
   };
 
-  const deactivateDeveloperMode = () => {
+  const confirmDeactivateDeveloperMode = () => {
     setIsDeveloperMode(false);
     localStorage.removeItem('spacecraft_secure_dev');
+    setShowDeactivateModal(false);
     setCustomAlertMessage('Developer mode deactivated successfully.');
   };
 
@@ -285,10 +289,10 @@ export default function App() {
     setCustomAlertMessage('Showcase rooms saved to browser storage successfully!');
   };
 
-  const exportShowcaseJson = () => {
+  const openExportModal = () => {
     const jsonString = JSON.stringify(showcaseRooms, null, 2);
-    navigator.clipboard.writeText(jsonString);
-    setCustomAlertMessage('Showcase room configuration copied to clipboard!');
+    setExportedCodeString(jsonString);
+    setShowExportModal(true);
   };
 
   return (
@@ -356,6 +360,50 @@ export default function App() {
         </div>
       )}
 
+      {/* Custom Deactivate Developer Mode Modal */}
+      {showDeactivateModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
+          <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6 w-full max-w-sm shadow-2xl space-y-4 text-center">
+            <h3 className="text-base font-bold text-white">Deactivate Developer Mode?</h3>
+            <p className="text-xs text-slate-300">Are you sure you want to lock developer controls and return to visitor view?</p>
+            <div className="flex gap-3 pt-2">
+              <button onClick={() => setShowDeactivateModal(false)} className="flex-1 bg-slate-800 hover:bg-slate-700 text-slate-200 py-2.5 rounded-xl text-xs font-semibold transition">
+                Cancel
+              </button>
+              <button onClick={confirmDeactivateDeveloperMode} className="flex-1 bg-red-600 hover:bg-red-500 text-white py-2.5 rounded-xl text-xs font-semibold transition shadow-lg">
+                Deactivate
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Custom Export Code Modal */}
+      {showExportModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
+          <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6 w-full max-w-2xl shadow-2xl space-y-4">
+            <div className="flex items-center justify-between">
+              <h3 className="text-base font-bold text-white">Export Room Code</h3>
+              <button onClick={() => setShowExportModal(false)} className="text-slate-400 hover:text-white"><X className="w-5 h-5" /></button>
+            </div>
+            <p className="text-xs text-slate-400">Copy this JavaScript array configuration directly into your source code.</p>
+            <textarea 
+              readOnly 
+              value={exportedCodeString} 
+              className="w-full h-64 bg-slate-950 border border-slate-800 rounded-xl p-3 text-xs font-mono text-cyan-300 focus:outline-none select-all"
+            />
+            <div className="flex gap-3">
+              <button onClick={() => setShowExportModal(false)} className="flex-1 bg-slate-800 hover:bg-slate-700 text-slate-200 py-2.5 rounded-xl text-xs font-semibold transition">
+                Close
+              </button>
+              <button onClick={() => { navigator.clipboard.writeText(exportedCodeString); setCustomAlertMessage('Code copied to clipboard successfully!'); setShowExportModal(false); }} className="flex-1 bg-amber-600 hover:bg-amber-500 text-white py-2.5 rounded-xl text-xs font-semibold transition shadow-lg flex items-center justify-center gap-2">
+                <Copy className="w-3.5 h-3.5" /> Copy to Clipboard
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Custom Alert Modal */}
       {customAlertMessage && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
@@ -410,7 +458,7 @@ export default function App() {
                     <div className="flex items-center gap-2 text-amber-400 font-bold text-xs uppercase">
                       <ShieldCheck className="w-4 h-4" /> Dev Tools
                     </div>
-                    <button onClick={deactivateDeveloperMode} className="text-[10px] text-red-400 hover:underline">Deactivate</button>
+                    <button onClick={() => setShowDeactivateModal(true)} className="text-[10px] text-red-400 hover:underline">Deactivate</button>
                   </div>
                   <div className="space-y-2">
                     <span className="text-xs font-semibold text-cyan-400 block">Add Item</span>
@@ -438,8 +486,8 @@ export default function App() {
                     <button onClick={saveShowcaseLocally} className="w-full bg-emerald-600 hover:bg-emerald-500 text-white py-2.5 rounded-xl text-xs font-semibold flex items-center justify-center gap-2 transition shadow-lg">
                       <Save className="w-3.5 h-3.5" /> Save to Browser Memory
                     </button>
-                    <button onClick={exportShowcaseJson} className="w-full bg-amber-600 hover:bg-amber-500 text-white py-2.5 rounded-xl text-xs font-semibold flex items-center justify-center gap-2 transition shadow-lg">
-                      <Copy className="w-3.5 h-3.5" /> Export Room to Code
+                    <button onClick={openExportModal} className="w-full bg-amber-600 hover:bg-amber-500 text-white py-2.5 rounded-xl text-xs font-semibold flex items-center justify-center gap-2 transition shadow-lg">
+                      <Copy className="w-3.5 h-3.5" /> Export Room Code
                     </button>
                   </div>
                 </div>
@@ -456,10 +504,9 @@ export default function App() {
                   <directionalLight position={[5, 8, 5]} intensity={1.2} castShadow={editorSettings.shadowsEnabled} shadow-bias={-0.0001} />
                   <Environment preset="apartment" />
                   
-                  {/* Always-on global background grid */}
+                  {/* Full-viewer background grid */}
                   <Grid position={[0, 0.001, 0]} args={[12, 12]} cellSize={0.5} cellThickness={0.8} cellColor="#94a3b8" sectionSize={1} sectionThickness={1.2} sectionColor="#64748b" />
                   
-                  {/* Room structure with optional square grid */}
                   <RoomStructure room={activeShowcase} gridSize={editorSettings.gridSize} showRoomGrid={editorSettings.showRoomGrid} />
 
                   {activeShowcase.furniture.map(item => (
@@ -740,7 +787,7 @@ export default function App() {
         <button 
           onClick={() => {
             if (isDeveloperMode) {
-              deactivateDeveloperMode();
+              setShowDeactivateModal(true);
             } else {
               setShowDevModal(true);
             }

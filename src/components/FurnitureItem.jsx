@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { PivotControls } from '@react-three/drei';
 import { FurnitureModel } from './FurnitureModel';
+import * as THREE from 'three';
 
 export function FurnitureItem({ item, onSelect, isSelected, onUpdatePosition, isColliding, isReadOnly }) {
   const [hovered, setHovered] = useState(false);
@@ -24,10 +25,13 @@ export function FurnitureItem({ item, onSelect, isSelected, onUpdatePosition, is
           disableRotation={true}
           axisColors={isColliding ? ['#ef4444', '#ef4444', '#ef4444'] : ['#6366f1', '#10b981', '#06b6d4']}
           onDrag={(matrix) => {
-            // Extract exact translation vector relative to the item's origin
-            const deltaX = matrix.elements[12];
-            const deltaZ = matrix.elements[14];
-            onUpdatePosition(item.id, item.x + deltaX, item.z + deltaZ);
+            const position = new THREE.Vector3();
+            const rotation = new THREE.Euler();
+            const scale = new THREE.Vector3();
+            matrix.decompose(position, rotation, scale);
+
+            // Pass absolute accumulated world offset to App.jsx
+            onUpdatePosition(item.id, item.x + position.x, item.z + position.z);
           }}
         >
           <group 
