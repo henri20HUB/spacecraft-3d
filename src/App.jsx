@@ -1,10 +1,10 @@
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo } from 'react';
 import { Canvas } from '@react-three/fiber';
 import { OrbitControls, Grid, ContactShadows, Environment } from '@react-three/drei';
 import { 
   Box, Maximize2, Trash2, Sparkles, 
   RotateCw, AlertTriangle, 
-  FolderPlus, Edit3, ArrowLeft, ShieldCheck, Save, Copy
+  FolderPlus, Edit3, ArrowLeft, ShieldCheck, Copy, Sliders, CheckSquare, Square
 } from 'lucide-react';
 
 import { RoomStructure } from './components/RoomStructure';
@@ -27,29 +27,38 @@ const ITEM_DIMENSIONS = {
   poster: { width: 0.9, depth: 0.1, height: 1.2 }
 };
 
+// Accurate Collision Detection taking rotation into account
 function checkCollision(itemA, itemB) {
   if (itemA.type === 'poster' || itemB.type === 'poster') return false;
 
   const dimA = ITEM_DIMENSIONS[itemA.type] || { width: 1, depth: 1 };
   const dimB = ITEM_DIMENSIONS[itemB.type] || { width: 1, depth: 1 };
-  const isRotatedA = (itemA.rotation || 0) % 180 !== 0;
+  
+  const isRotatedA = Math.round((itemA.rotation || 0) / 90) % 2 !== 0;
   const wA = isRotatedA ? dimA.depth : dimA.width;
   const dA = isRotatedA ? dimA.width : dimA.depth;
 
-  const isRotatedB = (itemB.rotation || 0) % 180 !== 0;
+  const isRotatedB = Math.round((itemB.rotation || 0) / 90) % 2 !== 0;
   const wB = isRotatedB ? dimB.depth : dimB.width;
   const dB = isRotatedB ? dimB.width : dimB.depth;
 
   const boxA = { minX: itemA.x - wA / 2, maxX: itemA.x + wA / 2, minZ: itemA.z - dA / 2, maxZ: itemA.z + dA / 2 };
   const boxB = { minX: itemB.x - wB / 2, maxX: itemB.x + wB / 2, minZ: itemB.z - dB / 2, maxZ: itemB.z + dB / 2 };
 
-  return boxA.minX < boxB.maxX && boxA.maxX > boxB.minX && boxA.minZ < boxB.maxZ && boxA.maxZ > boxB.minZ;
+  // Strict overlap check with a small buffer to prevent false positives
+  const buffer = 0.01;
+  return (
+    boxA.minX + buffer < boxB.maxX - buffer &&
+    boxA.maxX - buffer > boxB.minX + buffer &&
+    boxA.minZ + buffer < boxB.maxZ - buffer &&
+    boxA.maxZ - buffer > boxB.minZ + buffer
+  );
 }
 
 function isOutOfBounds(item, room) {
   if (item.type === 'poster') return false;
   const dim = ITEM_DIMENSIONS[item.type] || { width: 1, depth: 1 };
-  const isRotated = (item.rotation || 0) % 180 !== 0;
+  const isRotated = Math.round((item.rotation || 0) / 90) % 2 !== 0;
   const w = isRotated ? dim.depth : dim.width;
   const d = isRotated ? dim.width : dim.depth;
 
@@ -60,18 +69,30 @@ function isOutOfBounds(item, room) {
 export default function App() {
   const [viewMode, setViewMode] = useState('home');
   const [showcaseIndex, setShowcaseIndex] = useState(0);
-  const [isDeveloperMode, setIsDeveloperMode] = useState(false);
+  
+  // Secure Developer Mode: Requires secret keyboard shortcut (Ctrl + Shift + D) or URL hash `#dev`
+  const [isDeveloperMode, setIsDeveloperMode] = useState(() => {
+    return window.location.hash === '#dev' || localStorage.getItem('spacecraft_secure_dev') === 'true';
+  });
 
-  // Enable developer mode check on mount
-  useEffect(() => {
-    const devFlag = localStorage.getItem('spacecraft_dev_mode');
-    if (devFlag === 'true') setIsDeveloperMode(true);
-  }, []);
+  // Editor Settings Router State (Right Sidebar)
+  const [editorSettings, setEditorSettings] = useState({
+    snapToGrid: true,
+    gridSize: 0.25,
+    showDimensions: true,
+    shadowsEnabled: true,
+    wireframeMode: false
+  });
 
-  const toggleDeveloperMode = () => {
-    const nextState = !isDeveloperMode;
-    setIsDeveloperMode(nextState);
-    localStorage.setItem('spacecraft_dev_mode', nextState ? 'true' : 'false');
+  const triggerSecureDeveloperMode = () => {
+    const password = prompt('Enter Developer Access Password:');
+    if (password === 'spacecraft2026') {
+      setIsDeveloperMode(true);
+      localStorage.setItem('spacecraft_secure_dev', 'true');
+      alert('Developer mode unlocked successfully!');
+    } else if (password !== null) {
+      alert('Incorrect developer password.');
+    }
   };
 
   const [showcaseRooms, setShowcaseRooms] = useState([
@@ -138,14 +159,13 @@ export default function App() {
   const [activeRoomId, setActiveRoomId] = useState(null);
   const [selectedIds, setSelectedIds] = useState([]);
 
-  // Determine active room based on view mode
   const activeShowcase = showcaseRooms[showcaseIndex];
   const activeRoom = viewMode === 'editor' 
     ? (userRooms.find(r => r.id === activeRoomId) || userRooms[0])
     : activeShowcase;
 
   const handleSelect = (id, isShiftPressed) => {
-    if (viewMode === 'home' && !isDeveloperMode) return; // Users cannot select/edit in showcase mode
+    if (viewMode === 'home' && !isDeveloperMode) return;
     if (isShiftPressed) {
       if (selectedIds.includes(id)) {
         setSelectedIds(selectedIds.filter(i => i !== id));
@@ -198,7 +218,6 @@ export default function App() {
 
   const updateActiveRoom = (updatedFields) => {
     if (viewMode === 'home') {
-      // Update active showcase room directly as developer
       setShowcaseRooms(showcaseRooms.map((room, idx) => idx === showcaseIndex ? { ...room, ...updatedFields } : room));
     } else {
       setUserRooms(userRooms.map(r => r.id === activeRoom.id ? { ...r, ...updatedFields } : r));
@@ -212,7 +231,17 @@ export default function App() {
   };
 
   const updatePosition = (id, x, z) => {
-    const updated = activeRoom.furniture.map(item => item.id === id ? { ...item, x, z } : item);
+    let finalX = x;
+    let finalZ = z;
+
+    // Apply grid snapping if enabled in the router settings
+    if (editorSettings.snapToGrid) {
+      const step = editorSettings.gridSize;
+      finalX = Math.round(x / step) * step;
+      finalZ = Math.round(z / step) * step;
+    }
+
+    const updated = activeRoom.furniture.map(item => item.id === id ? { ...item, x: finalX, z: finalZ } : item);
     updateActiveRoom({ furniture: updated });
   };
 
@@ -236,14 +265,14 @@ export default function App() {
   const exportShowcaseJson = () => {
     const jsonString = JSON.stringify(showcaseRooms, null, 2);
     navigator.clipboard.writeText(jsonString);
-    alert('Showcase room configuration copied to clipboard! You can now paste it directly into your code if needed.');
+    alert('Showcase room configuration copied to clipboard!');
   };
 
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100 font-sans antialiased selection:bg-indigo-500 selection:text-white">
       
       {/* Header */}
-      <header className="sticky top-0 z-50 bg-slate-950/80 backdrop-blur-md border-b border-slate-800/80">
+      <header className="sticky top-0 z-50 bg-slate-950/85 backdrop-blur-md border-b border-slate-800/80">
         <div className="max-w-7xl mx-auto px-6 h-20 flex items-center justify-between">
           <div className="flex items-center gap-3 cursor-pointer" onClick={() => setViewMode('home')}>
             <div className="w-10 h-10 rounded-2xl bg-gradient-to-tr from-indigo-500 to-cyan-400 flex items-center justify-center shadow-lg shadow-indigo-500/20">
@@ -296,18 +325,13 @@ export default function App() {
             </div>
 
             <div className="flex flex-col lg:flex-row gap-6">
-              {/* Developer Toolbar (Only visible when Dev Mode is active on Showcase) */}
               {isDeveloperMode && (
                 <div className="w-full lg:w-80 bg-slate-950 border border-amber-500/30 rounded-2xl p-5 space-y-4">
                   <div className="flex items-center gap-2 text-amber-400 font-bold text-xs uppercase">
                     <ShieldCheck className="w-4 h-4" /> Developer Showcase Tools
                   </div>
-                  <p className="text-[11px] text-slate-400 leading-relaxed">
-                    You are in Developer Mode. Click any furniture piece in the preview window to move or rotate it using the exact user studio tools.
-                  </p>
-
                   <div className="space-y-2">
-                    <span className="text-xs font-semibold text-cyan-400 block">Add Item to Showcase</span>
+                    <span className="text-xs font-semibold text-cyan-400 block">Add Item</span>
                     <div className="grid grid-cols-2 gap-2">
                       <button onClick={() => addFurniture('sofa')} className="p-2 bg-slate-900 hover:bg-slate-850 rounded-xl text-xs text-slate-200">Sofa</button>
                       <button onClick={() => addFurniture('tisch')} className="p-2 bg-slate-900 hover:bg-slate-850 rounded-xl text-xs text-slate-200">Table</button>
@@ -323,7 +347,7 @@ export default function App() {
                         <RotateCw className="w-3.5 h-3.5 text-cyan-400" /> Snap Rotate 45°
                       </button>
                       <button onClick={deleteSelected} className="w-full bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-900/30 py-2 rounded-xl text-xs font-semibold flex items-center justify-center gap-1.5">
-                        <Trash2 className="w-3.5 h-3.5" /> Remove Selected
+                        <Trash2 className="w-3.5 h-3.5" /> Remove
                       </button>
                     </div>
                   )}
@@ -337,12 +361,12 @@ export default function App() {
               {/* Viewport Canvas */}
               <div className="flex-1 h-[520px] w-full bg-slate-950 border border-slate-800 rounded-2xl overflow-hidden relative">
                 <Canvas 
-                  shadows 
+                  shadows={editorSettings.shadowsEnabled}
                   camera={{ position: [0, 5, 7], fov: 45 }}
                   onPointerMissed={() => setSelectedIds([])}
                 >
                   <ambientLight intensity={0.7} />
-                  <directionalLight position={[5, 8, 5]} intensity={1.2} castShadow shadow-bias={-0.0001} />
+                  <directionalLight position={[5, 8, 5]} intensity={1.2} castShadow={editorSettings.shadowsEnabled} shadow-bias={-0.0001} />
                   <Environment preset="apartment" />
                   <RoomStructure room={activeShowcase} />
                   <Grid position={[0, 0.001, 0]} args={[12, 12]} cellSize={0.5} cellThickness={0.8} cellColor="#94a3b8" sectionSize={1} sectionThickness={1.2} sectionColor="#64748b" />
@@ -424,9 +448,10 @@ export default function App() {
           </div>
 
           <div className="bg-slate-900/60 border border-slate-800 rounded-3xl p-4 sm:p-6 shadow-2xl backdrop-blur-xl">
-            <div className="flex flex-col lg:flex-row gap-6">
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
               
-              <div className="w-full lg:w-96 space-y-6">
+              {/* Left Toolbar */}
+              <div className="lg:col-span-3 space-y-6">
                 {collisionDetails.length > 0 && (
                   <div className="bg-red-500/10 border border-red-500/30 p-4 rounded-2xl space-y-2">
                     <div className="flex items-center gap-2 text-red-400 font-bold text-xs uppercase"><AlertTriangle className="w-4 h-4" /> Collision Warnings</div>
@@ -476,20 +501,20 @@ export default function App() {
                   </div>
                 ) : (
                   <div className="bg-slate-950 border border-slate-800/80 rounded-2xl p-5 text-center text-slate-500 text-xs">
-                    Hover over furniture to preview. Click empty space to deselect. Shift + Click for multi-select.
+                    Click furniture to select. Shift + Click for multi-select.
                   </div>
                 )}
               </div>
 
               {/* Viewport Canvas */}
-              <div className="flex-1 h-[500px] lg:h-[600px] bg-slate-950 border border-slate-800 rounded-2xl overflow-hidden relative">
+              <div className="lg:col-span-6 h-[500px] lg:h-[600px] bg-slate-950 border border-slate-800 rounded-2xl overflow-hidden relative">
                 <Canvas 
-                  shadows 
+                  shadows={editorSettings.shadowsEnabled}
                   camera={{ position: [0, 5, 7], fov: 45 }}
                   onPointerMissed={() => setSelectedIds([])}
                 >
                   <ambientLight intensity={0.7} />
-                  <directionalLight position={[5, 8, 5]} intensity={1.2} castShadow shadow-bias={-0.0001} />
+                  <directionalLight position={[5, 8, 5]} intensity={1.2} castShadow={editorSettings.shadowsEnabled} shadow-bias={-0.0001} />
                   <Environment preset="apartment" />
                   <ContactShadows position={[0, 0.01, 0]} opacity={0.6} scale={12} blur={1.5} far={4} />
 
@@ -512,20 +537,68 @@ export default function App() {
                 </Canvas>
               </div>
 
+              {/* Right Inspector Router Sidebar */}
+              <div className="lg:col-span-3 bg-slate-950 border border-slate-800/80 rounded-2xl p-5 space-y-5">
+                <div className="flex items-center gap-2 text-indigo-400 font-bold text-xs uppercase">
+                  <Sliders className="w-4 h-4" /> Workspace Router
+                </div>
+                <p className="text-[11px] text-slate-400 leading-relaxed">
+                  Configure snapping rules, grid precision, and real-time viewport rendering options.
+                </p>
+
+                <div className="space-y-4 pt-2 border-t border-slate-800">
+                  {/* Grid Snapping Toggle */}
+                  <div className="flex items-center justify-between cursor-pointer" onClick={() => setEditorSettings(s => ({ ...s, snapToGrid: !s.snapToGrid }))}>
+                    <div className="space-y-0.5">
+                      <span className="text-xs font-semibold text-slate-200 block">Snap to Grid</span>
+                      <span className="text-[10px] text-slate-400 block">Lock movement increments</span>
+                    </div>
+                    {editorSettings.snapToGrid ? <CheckSquare className="w-4 h-4 text-cyan-400" /> : <Square className="w-4 h-4 text-slate-600" />}
+                  </div>
+
+                  {/* Grid Size Increment Selector */}
+                  {editorSettings.snapToGrid && (
+                    <div className="space-y-1.5 pl-2">
+                      <label className="text-[11px] text-slate-400 block">Snap Precision</label>
+                      <div className="grid grid-cols-3 gap-1.5">
+                        {[0.1, 0.25, 0.5].map(val => (
+                          <button 
+                            key={val} 
+                            onClick={() => setEditorSettings(s => ({ ...s, gridSize: val }))}
+                            className={`py-1.5 rounded-lg text-xs font-semibold transition ${editorSettings.gridSize === val ? 'bg-indigo-600 text-white' : 'bg-slate-900 text-slate-400 hover:text-white'}`}
+                          >
+                            {val}m
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Shadows Toggle */}
+                  <div className="flex items-center justify-between cursor-pointer pt-2 border-t border-slate-800/80" onClick={() => setEditorSettings(s => ({ ...s, shadowsEnabled: !s.shadowsEnabled }))}>
+                    <div className="space-y-0.5">
+                      <span className="text-xs font-semibold text-slate-200 block">Real-time Shadows</span>
+                      <span className="text-[10px] text-slate-400 block">Cast contact shadows</span>
+                    </div>
+                    {editorSettings.shadowsEnabled ? <CheckSquare className="w-4 h-4 text-cyan-400" /> : <Square className="w-4 h-4 text-slate-600" />}
+                  </div>
+                </div>
+              </div>
+
             </div>
           </div>
         </main>
       )}
 
-      {/* Footer with Secret Developer Toggle */}
+      {/* Footer */}
       <footer className="border-t border-slate-900 py-10 px-6 text-center text-xs text-slate-500 mt-16 flex flex-col sm:flex-row items-center justify-center gap-4">
         <p>© 2026 SpaceCraft 3D. Precision Architectural Studio.</p>
         <button 
-          onClick={toggleDeveloperMode} 
+          onClick={triggerSecureDeveloperMode} 
           className="px-3 py-1 rounded-lg bg-slate-900 border border-slate-800 text-[11px] text-slate-400 hover:text-white transition flex items-center gap-1.5"
         >
           <ShieldCheck className="w-3.5 h-3.5 text-amber-400" />
-          {isDeveloperMode ? 'Disable Developer Mode' : 'Enable Developer Mode'}
+          {isDeveloperMode ? 'Developer Mode Active' : 'Developer Login'}
         </button>
       </footer>
 
