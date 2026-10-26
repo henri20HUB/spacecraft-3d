@@ -4,7 +4,7 @@ import { OrbitControls, Grid, ContactShadows, Environment } from '@react-three/d
 import { 
   Box, Maximize2, Trash2, Sparkles, 
   RotateCw, AlertTriangle, 
-  FolderPlus, Edit3, ArrowLeft, ShieldCheck, Copy, Sliders, CheckSquare, Square
+  FolderPlus, Edit3, ArrowLeft, ShieldCheck, Copy, Sliders, CheckSquare, Square, Lock, X
 } from 'lucide-react';
 
 import { RoomStructure } from './components/RoomStructure';
@@ -27,7 +27,6 @@ const ITEM_DIMENSIONS = {
   poster: { width: 0.9, depth: 0.1, height: 1.2 }
 };
 
-// Accurate Collision Detection taking rotation into account
 function checkCollision(itemA, itemB) {
   if (itemA.type === 'poster' || itemB.type === 'poster') return false;
 
@@ -45,7 +44,6 @@ function checkCollision(itemA, itemB) {
   const boxA = { minX: itemA.x - wA / 2, maxX: itemA.x + wA / 2, minZ: itemA.z - dA / 2, maxZ: itemA.z + dA / 2 };
   const boxB = { minX: itemB.x - wB / 2, maxX: itemB.x + wB / 2, minZ: itemB.z - dB / 2, maxZ: itemB.z + dB / 2 };
 
-  // Strict overlap check with a small buffer to prevent false positives
   const buffer = 0.01;
   return (
     boxA.minX + buffer < boxB.maxX - buffer &&
@@ -70,29 +68,41 @@ export default function App() {
   const [viewMode, setViewMode] = useState('home');
   const [showcaseIndex, setShowcaseIndex] = useState(0);
   
-  // Secure Developer Mode: Requires secret keyboard shortcut (Ctrl + Shift + D) or URL hash `#dev`
   const [isDeveloperMode, setIsDeveloperMode] = useState(() => {
-    return window.location.hash === '#dev' || localStorage.getItem('spacecraft_secure_dev') === 'true';
+    return localStorage.getItem('spacecraft_secure_dev') === 'true';
   });
 
-  // Editor Settings Router State (Right Sidebar)
+  // Custom Developer Password Modal State
+  const [showDevModal, setShowDevModal] = useState(false);
+  const [devPasswordInput, setDevPasswordInput] = useState('');
+  const [devModalError, setDevModalError] = useState(false);
+
+  // Workspace Router Settings (Sidebar)
   const [editorSettings, setEditorSettings] = useState({
     snapToGrid: true,
     gridSize: 0.25,
-    showDimensions: true,
+    showGridLines: true,
     shadowsEnabled: true,
     wireframeMode: false
   });
 
-  const triggerSecureDeveloperMode = () => {
-    const password = prompt('Enter Developer Access Password:');
-    if (password === 'spacecraft2026') {
+  const handleDeveloperLogin = (e) => {
+    e.preventDefault();
+    if (devPasswordInput === 'spacecraft2026') {
       setIsDeveloperMode(true);
       localStorage.setItem('spacecraft_secure_dev', 'true');
-      alert('Developer mode unlocked successfully!');
-    } else if (password !== null) {
-      alert('Incorrect developer password.');
+      setShowDevModal(false);
+      setDevPasswordInput('');
+      setDevModalError(false);
+    } else {
+      setDevModalError(true);
     }
+  };
+
+  const deactivateDeveloperMode = () => {
+    setIsDeveloperMode(false);
+    localStorage.removeItem('spacecraft_secure_dev');
+    alert('Developer mode deactivated successfully.');
   };
 
   const [showcaseRooms, setShowcaseRooms] = useState([
@@ -230,15 +240,15 @@ export default function App() {
     setSelectedIds([newItem.id]);
   };
 
-  const updatePosition = (id, x, z) => {
-    let finalX = x;
-    let finalZ = z;
+  // Permanent Position Update with Grid Snapping
+  const updatePosition = (id, targetX, targetZ) => {
+    let finalX = targetX;
+    let finalZ = targetZ;
 
-    // Apply grid snapping if enabled in the router settings
     if (editorSettings.snapToGrid) {
       const step = editorSettings.gridSize;
-      finalX = Math.round(x / step) * step;
-      finalZ = Math.round(z / step) * step;
+      finalX = Math.round(targetX / step) * step;
+      finalZ = Math.round(targetZ / step) * step;
     }
 
     const updated = activeRoom.furniture.map(item => item.id === id ? { ...item, x: finalX, z: finalZ } : item);
@@ -290,6 +300,49 @@ export default function App() {
         </div>
       </header>
 
+      {/* Custom Developer Password Modal */}
+      {showDevModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
+          <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6 w-full max-w-md shadow-2xl space-y-5 relative">
+            <button onClick={() => setShowDevModal(false)} className="absolute top-5 right-5 text-slate-400 hover:text-white">
+              <X className="w-5 h-5" />
+            </button>
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-amber-500/10 border border-amber-500/30 flex items-center justify-center text-amber-400">
+                <Lock className="w-5 h-5" />
+              </div>
+              <div>
+                <h3 className="text-base font-bold text-white">Developer Authentication</h3>
+                <p className="text-xs text-slate-400">Enter your secure developer access password.</p>
+              </div>
+            </div>
+
+            <form onSubmit={handleDeveloperLogin} className="space-y-4">
+              <div>
+                <input 
+                  type="password" 
+                  placeholder="Enter password..."
+                  value={devPasswordInput}
+                  onChange={(e) => setDevPasswordInput(e.target.value)}
+                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-sm text-white focus:outline-none focus:border-amber-500"
+                  autoFocus
+                />
+                {devModalError && <p className="text-xs text-red-400 mt-1.5">Incorrect password. (Hint: spacecraft2026)</p>}
+              </div>
+
+              <div className="flex gap-3">
+                <button type="button" onClick={() => setShowDevModal(false)} className="flex-1 bg-slate-800 hover:bg-slate-700 text-slate-200 py-2.5 rounded-xl text-xs font-semibold transition">
+                  Cancel
+                </button>
+                <button type="submit" className="flex-1 bg-amber-600 hover:bg-amber-500 text-white py-2.5 rounded-xl text-xs font-semibold transition shadow-lg">
+                  Unlock Developer Mode
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
       {/* 1. HOME / SHOWCASE PAGE */}
       {viewMode === 'home' && (
         <main className="max-w-7xl mx-auto px-6 py-12 space-y-12">
@@ -324,11 +377,15 @@ export default function App() {
               </div>
             </div>
 
-            <div className="flex flex-col lg:flex-row gap-6">
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+              {/* Developer Toolbar (Only visible when Dev Mode is active) */}
               {isDeveloperMode && (
-                <div className="w-full lg:w-80 bg-slate-950 border border-amber-500/30 rounded-2xl p-5 space-y-4">
-                  <div className="flex items-center gap-2 text-amber-400 font-bold text-xs uppercase">
-                    <ShieldCheck className="w-4 h-4" /> Developer Showcase Tools
+                <div className="lg:col-span-3 bg-slate-950 border border-amber-500/30 rounded-2xl p-5 space-y-4">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2 text-amber-400 font-bold text-xs uppercase">
+                      <ShieldCheck className="w-4 h-4" /> Dev Tools
+                    </div>
+                    <button onClick={deactivateDeveloperMode} className="text-[10px] text-red-400 hover:underline">Deactivate</button>
                   </div>
                   <div className="space-y-2">
                     <span className="text-xs font-semibold text-cyan-400 block">Add Item</span>
@@ -359,7 +416,7 @@ export default function App() {
               )}
 
               {/* Viewport Canvas */}
-              <div className="flex-1 h-[520px] w-full bg-slate-950 border border-slate-800 rounded-2xl overflow-hidden relative">
+              <div className={`${isDeveloperMode ? 'lg:col-span-6' : 'lg:col-span-9'} h-[520px] w-full bg-slate-950 border border-slate-800 rounded-2xl overflow-hidden relative`}>
                 <Canvas 
                   shadows={editorSettings.shadowsEnabled}
                   camera={{ position: [0, 5, 7], fov: 45 }}
@@ -369,14 +426,19 @@ export default function App() {
                   <directionalLight position={[5, 8, 5]} intensity={1.2} castShadow={editorSettings.shadowsEnabled} shadow-bias={-0.0001} />
                   <Environment preset="apartment" />
                   <RoomStructure room={activeShowcase} />
-                  <Grid position={[0, 0.001, 0]} args={[12, 12]} cellSize={0.5} cellThickness={0.8} cellColor="#94a3b8" sectionSize={1} sectionThickness={1.2} sectionColor="#64748b" />
+                  {editorSettings.showGridLines && (
+                    <Grid position={[0, 0.001, 0]} args={[12, 12]} cellSize={0.5} cellThickness={0.8} cellColor="#94a3b8" sectionSize={1} sectionThickness={1.2} sectionColor="#64748b" />
+                  )}
                   {activeShowcase.furniture.map(item => (
                     <FurnitureItem 
                       key={item.id} 
                       item={item} 
                       onSelect={handleSelect} 
                       isSelected={isDeveloperMode && selectedIds.includes(item.id)} 
-                      onUpdatePosition={updatePosition}
+                      onUpdatePosition={(id, x, z) => {
+                        const itemObj = activeShowcase.furniture.find(f => f.id === id);
+                        updatePosition(id, itemObj.x + x, itemObj.z + z);
+                      }}
                       isColliding={collidingIds.has(item.id)}
                       isReadOnly={!isDeveloperMode}
                     />
@@ -384,6 +446,59 @@ export default function App() {
                   <OrbitControls makeDefault minDistance={4} maxDistance={10} maxPolarAngle={Math.PI / 2 - 0.05} />
                 </Canvas>
               </div>
+
+              {/* Workspace Router Sidebar in Developer Mode */}
+              {isDeveloperMode && (
+                <div className="lg:col-span-3 bg-slate-950 border border-slate-800/80 rounded-2xl p-5 space-y-4">
+                  <div className="flex items-center gap-2 text-indigo-400 font-bold text-xs uppercase">
+                    <Sliders className="w-4 h-4" /> Workspace Router
+                  </div>
+                  <p className="text-[11px] text-slate-400 leading-relaxed">
+                    Configure precision snapping rules and real-time viewport options.
+                  </p>
+
+                  <div className="space-y-3 pt-2 border-t border-slate-800">
+                    {/* Snap to Grid */}
+                    <div className="flex items-center justify-between cursor-pointer" onClick={() => setEditorSettings(s => ({ ...s, snapToGrid: !s.snapToGrid }))}>
+                      <div>
+                        <span className="text-xs font-semibold text-slate-200 block">Snap to Grid</span>
+                        <span className="text-[9px] text-slate-400 block">Snaps dropped items to grid increments</span>
+                      </div>
+                      {editorSettings.snapToGrid ? <CheckSquare className="w-4 h-4 text-cyan-400" /> : <Square className="w-4 h-4 text-slate-600" />}
+                    </div>
+
+                    {/* Snap Precision Buttons */}
+                    {editorSettings.snapToGrid && (
+                      <div className="space-y-1 pl-2">
+                        <label className="text-[10px] text-slate-400 block">Snapping Precision</label>
+                        <div className="grid grid-cols-3 gap-1">
+                          {[0.1, 0.25, 0.5].map(val => (
+                            <button 
+                              key={val} 
+                              onClick={() => setEditorSettings(s => ({ ...s, gridSize: val }))}
+                              className={`py-1 rounded-lg text-xs font-semibold transition ${editorSettings.gridSize === val ? 'bg-indigo-600 text-white' : 'bg-slate-900 text-slate-400 hover:text-white'}`}
+                            >
+                              {val}m
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Show Grid Lines */}
+                    <div className="flex items-center justify-between cursor-pointer pt-2 border-t border-slate-800/80" onClick={() => setEditorSettings(s => ({ ...s, showGridLines: !s.showGridLines }))}>
+                      <span className="text-xs font-semibold text-slate-200">Show Floor Grid</span>
+                      {editorSettings.showGridLines ? <CheckSquare className="w-4 h-4 text-cyan-400" /> : <Square className="w-4 h-4 text-slate-600" />}
+                    </div>
+
+                    {/* Real-time Shadows */}
+                    <div className="flex items-center justify-between cursor-pointer pt-2 border-t border-slate-800/80" onClick={() => setEditorSettings(s => ({ ...s, shadowsEnabled: !s.shadowsEnabled }))}>
+                      <span className="text-xs font-semibold text-slate-200">Real-time Shadows</span>
+                      {editorSettings.shadowsEnabled ? <CheckSquare className="w-4 h-4 text-cyan-400" /> : <Square className="w-4 h-4 text-slate-600" />}
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
 
             <div className="mt-6 flex justify-center">
@@ -519,7 +634,9 @@ export default function App() {
                   <ContactShadows position={[0, 0.01, 0]} opacity={0.6} scale={12} blur={1.5} far={4} />
 
                   <RoomStructure room={activeRoom} />
-                  <Grid position={[0, 0.001, 0]} args={[12, 12]} cellSize={0.5} cellThickness={0.8} cellColor="#94a3b8" sectionSize={1} sectionThickness={1.2} sectionColor="#64748b" />
+                  {editorSettings.showGridLines && (
+                    <Grid position={[0, 0.001, 0]} args={[12, 12]} cellSize={0.5} cellThickness={0.8} cellColor="#94a3b8" sectionSize={1} sectionThickness={1.2} sectionColor="#64748b" />
+                  )}
 
                   {activeRoom.furniture.map(item => (
                     <FurnitureItem 
@@ -527,7 +644,10 @@ export default function App() {
                       item={item} 
                       onSelect={handleSelect} 
                       isSelected={selectedIds.includes(item.id)} 
-                      onUpdatePosition={updatePosition}
+                      onUpdatePosition={(id, x, z) => {
+                        const itemObj = activeRoom.furniture.find(f => f.id === id);
+                        updatePosition(id, itemObj.x + x, itemObj.z + z);
+                      }}
                       isColliding={collidingIds.has(item.id)}
                       isReadOnly={false}
                     />
@@ -551,7 +671,7 @@ export default function App() {
                   <div className="flex items-center justify-between cursor-pointer" onClick={() => setEditorSettings(s => ({ ...s, snapToGrid: !s.snapToGrid }))}>
                     <div className="space-y-0.5">
                       <span className="text-xs font-semibold text-slate-200 block">Snap to Grid</span>
-                      <span className="text-[10px] text-slate-400 block">Lock movement increments</span>
+                      <span className="text-[9px] text-slate-400 block">Locks coordinates to precision step</span>
                     </div>
                     {editorSettings.snapToGrid ? <CheckSquare className="w-4 h-4 text-cyan-400" /> : <Square className="w-4 h-4 text-slate-600" />}
                   </div>
@@ -559,7 +679,7 @@ export default function App() {
                   {/* Grid Size Increment Selector */}
                   {editorSettings.snapToGrid && (
                     <div className="space-y-1.5 pl-2">
-                      <label className="text-[11px] text-slate-400 block">Snap Precision</label>
+                      <label className="text-[10px] text-slate-400 block">Snap Precision (m)</label>
                       <div className="grid grid-cols-3 gap-1.5">
                         {[0.1, 0.25, 0.5].map(val => (
                           <button 
@@ -574,12 +694,15 @@ export default function App() {
                     </div>
                   )}
 
-                  {/* Shadows Toggle */}
+                  {/* Show Floor Grid */}
+                  <div className="flex items-center justify-between cursor-pointer pt-2 border-t border-slate-800/80" onClick={() => setEditorSettings(s => ({ ...s, showGridLines: !s.showGridLines }))}>
+                    <span className="text-xs font-semibold text-slate-200">Show Floor Grid</span>
+                    {editorSettings.showGridLines ? <CheckSquare className="w-4 h-4 text-cyan-400" /> : <Square className="w-4 h-4 text-slate-600" />}
+                  </div>
+
+                  {/* Real-time Shadows */}
                   <div className="flex items-center justify-between cursor-pointer pt-2 border-t border-slate-800/80" onClick={() => setEditorSettings(s => ({ ...s, shadowsEnabled: !s.shadowsEnabled }))}>
-                    <div className="space-y-0.5">
-                      <span className="text-xs font-semibold text-slate-200 block">Real-time Shadows</span>
-                      <span className="text-[10px] text-slate-400 block">Cast contact shadows</span>
-                    </div>
+                    <span className="text-xs font-semibold text-slate-200">Real-time Shadows</span>
                     {editorSettings.shadowsEnabled ? <CheckSquare className="w-4 h-4 text-cyan-400" /> : <Square className="w-4 h-4 text-slate-600" />}
                   </div>
                 </div>
@@ -594,11 +717,17 @@ export default function App() {
       <footer className="border-t border-slate-900 py-10 px-6 text-center text-xs text-slate-500 mt-16 flex flex-col sm:flex-row items-center justify-center gap-4">
         <p>© 2026 SpaceCraft 3D. Precision Architectural Studio.</p>
         <button 
-          onClick={triggerSecureDeveloperMode} 
+          onClick={() => {
+            if (isDeveloperMode) {
+              deactivateDeveloperMode();
+            } else {
+              setShowDevModal(true);
+            }
+          }} 
           className="px-3 py-1 rounded-lg bg-slate-900 border border-slate-800 text-[11px] text-slate-400 hover:text-white transition flex items-center gap-1.5"
         >
           <ShieldCheck className="w-3.5 h-3.5 text-amber-400" />
-          {isDeveloperMode ? 'Developer Mode Active' : 'Developer Login'}
+          {isDeveloperMode ? 'Deactivate Developer Mode' : 'Developer Login'}
         </button>
       </footer>
 
