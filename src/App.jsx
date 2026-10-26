@@ -253,15 +253,24 @@ export default function App() {
     setSelectedIds([newItem.id]);
   };
 
-  // Synchronous Multi-Selection Movement & Rotation Update with NaN Protection
+  // Synchronous Multi-Selection Movement & Rotation Update with Active Grid Snapping & NaN Protection
   const updatePosition = (id, targetX, targetZ, newRotation) => {
     if (isNaN(targetX) || isNaN(targetZ) || !isFinite(targetX) || !isFinite(targetZ)) return;
 
     const draggedItem = activeRoom.furniture.find(f => f.id === id);
     if (!draggedItem) return;
 
-    const deltaX = targetX - draggedItem.x;
-    const deltaZ = targetZ - draggedItem.z;
+    let finalTargetX = targetX;
+    let finalTargetZ = targetZ;
+
+    if (editorSettings.snapToGrid && draggedItem.type !== 'poster') {
+      const step = editorSettings.gridSize;
+      finalTargetX = Math.round(targetX / step) * step;
+      finalTargetZ = Math.round(targetZ / step) * step;
+    }
+
+    const deltaX = finalTargetX - draggedItem.x;
+    const deltaZ = finalTargetZ - draggedItem.z;
     const deltaRot = (newRotation !== undefined && !isNaN(newRotation)) ? newRotation - draggedItem.rotation : 0;
 
     const idsToUpdate = selectedIds.includes(id) ? selectedIds : [id];
@@ -271,12 +280,6 @@ export default function App() {
         let nextX = item.x + deltaX;
         let nextZ = item.z + deltaZ;
         let nextRot = ((item.rotation || 0) + deltaRot + 360) % 360;
-
-        if (editorSettings.snapToGrid && item.type !== 'poster') {
-          const step = editorSettings.gridSize;
-          nextX = Math.round(nextX / step) * step;
-          nextZ = Math.round(nextZ / step) * step;
-        }
 
         if (isNaN(nextX) || isNaN(nextZ)) return item;
 
@@ -524,8 +527,6 @@ export default function App() {
                       onUpdatePosition={updatePosition}
                       isColliding={collidingIds.has(item.id)}
                       isReadOnly={!isDeveloperMode}
-                      gridSize={editorSettings.gridSize}
-                      snapToGrid={editorSettings.snapToGrid}
                     />
                   ))}
                   <OrbitControls makeDefault minDistance={4} maxDistance={10} maxPolarAngle={Math.PI / 2 - 0.05} />
@@ -727,8 +728,6 @@ export default function App() {
                       onUpdatePosition={updatePosition}
                       isColliding={collidingIds.has(item.id)}
                       isReadOnly={false}
-                      gridSize={editorSettings.gridSize}
-                      snapToGrid={editorSettings.snapToGrid}
                     />
                   ))}
 
