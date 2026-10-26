@@ -1,80 +1,63 @@
-import React, { useRef, useState } from 'react';
-import { PivotControls } from '@react-three/drei';
+import React, { useState } from 'react';
 import { FurnitureModel } from './FurnitureModel';
-import * as THREE from 'three';
 
 export function FurnitureItem({ item, onSelect, isSelected, onUpdatePosition, isColliding, isReadOnly }) {
   const [hovered, setHovered] = useState(false);
-  const groupRef = useRef();
+  const [isDragging, setIsDragging] = useState(false);
+  const [dragStartOffset, setDragStartOffset] = useState({ x: 0, z: 0 });
   const rotationRad = ((item.rotation || 0) * Math.PI) / 180;
 
-  const handleClick = (e) => {
+  const handlePointerDown = (e) => {
     if (isReadOnly) return;
     e.stopPropagation();
     onSelect(item.id, e.shiftKey);
+    setIsDragging(true);
+    setDragStartOffset({
+      x: e.point.x - item.x,
+      z: e.point.z - item.z
+    });
+    e.target.setPointerCapture(e.pointerId);
   };
 
-  if (!isReadOnly && isSelected) {
-    return (
-      <group ref={groupRef} position={[item.x, 0, item.z]} rotation={[0, rotationRad, 0]}>
-        <PivotControls
-          activeAxes={[true, false, true]}
-          depthTest={false}
-          anchor={[0, 0, 0]}
-          scale={0.75}
-          lineWidth={2.5}
-          disableRotation={false}
-          axisColors={isColliding ? ['#ef4444', '#ef4444', '#ef4444'] : ['#6366f1', '#10b981', '#06b6d4']}
-          onDrag={(matrix) => {
-            // Apply matrix directly to ref during drag to prevent React re-render feedback loops
-            if (groupRef.current) {
-              groupRef.current.matrix.copy(matrix);
-              groupRef.current.matrixAutoUpdate = false;
-            }
-          }}
-          onDragEnd={() => {
-            if (groupRef.current) {
-              groupRef.current.matrixAutoUpdate = true;
-              const position = new THREE.Vector3();
-              const rotation = new THREE.Euler();
-              const scale = new THREE.Vector3();
-              groupRef.current.matrix.decompose(position, rotation, scale);
+  const handlePointerMove = (e) => {
+    if (!isDragging || isReadOnly) return;
+    e.stopPropagation();
+    
+    // Exact floor raycast calculation - zero matrix accumulation, 100% stable
+    const targetX = e.point.x - dragStartOffset.x;
+    const targetZ = e.point.z - dragStartOffset.z;
 
-              const finalX = item.x + position.x;
-              const finalZ = item.z + position.z;
-              const finalRot = (item.rotation || 0) + (rotation.y * 180) / Math.PI;
+    onUpdatePosition(item.id, targetX, targetZ);
+  };
 
-              // Reset local ref matrix so React state position takes over cleanly
-              groupRef.current.position.set(0, 0, 0);
-              groupRef.current.rotation.set(0, 0, 0);
-              groupRef.current.scale.set(1, 1, 1);
-              groupRef.current.updateMatrix();
-
-              onUpdatePosition(item.id, finalX, finalZ, finalRot);
-            }
-          }}
-        >
-          <group 
-            onClick={handleClick}
-            onPointerOver={(e) => { e.stopPropagation(); setHovered(true); }}
-            onPointerOut={() => setHovered(false)}
-          >
-            <FurnitureModel item={item} isSelected={isSelected} isColliding={isColliding} isHovered={hovered} />
-          </group>
-        </PivotControls>
-      </group>
-    );
-  }
+  const handlePointerUp = (e) => {
+    if (!isDragging) return;
+    e.stopPropagation();
+    setIsDragging(false);
+    if (e.target.hasPointerCapture(e.pointerId)) {
+      e.target.releasePointerCapture(e.pointerId);
+    }
+  };
 
   return (
     <group 
       position={[item.x, 0, item.z]} 
       rotation={[0, rotationRad, 0]}
-      onClick={handleClick}
+      onPointerDown={handlePointerDown}
+      onPointerMove={handlePointerMove}
+      onPointerUp={handlePointerUp}
       onPointerOver={(e) => { if (!isReadOnly) { e.stopPropagation(); setHovered(true); } }}
-      onPointerOut={() => { if (!isReadOnly) setHovered(false); }}
+      onPointerOut={(e) => { if (!isReadOnly) { setHovered(false); } }}
     >
       <FurnitureModel item={item} isSelected={isSelected} isColliding={isColliding} isHovered={hovered} />
+
+      {/* Visual Selection Ring & Drag Indicator when selected */}
+      {!isReadOnly && isSelected && (
+        <mesh position={[0, 0.01, 0]} rotation={[-Math.PI / 2, 0, 0]}>
+          <ringGeometry args={[Math.max(item.width || 0.8, 0.8) * 0.5, Math.max(item.width || 0.8, 0.8) * 0.55, 32]} />
+          <meshBasicMaterial color={isColliding ? '#ef4444' : '#38bdf8'} transparent opacity={0.8} />
+        </mesh>
+      )}
     </group>
   );
 }
