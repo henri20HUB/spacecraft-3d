@@ -253,14 +253,16 @@ export default function App() {
     setSelectedIds([newItem.id]);
   };
 
-  // Synchronous Multi-Selection Movement & Rotation Update
+  // Synchronous Multi-Selection Movement & Rotation Update with NaN Protection
   const updatePosition = (id, targetX, targetZ, newRotation) => {
+    if (isNaN(targetX) || isNaN(targetZ) || !isFinite(targetX) || !isFinite(targetZ)) return;
+
     const draggedItem = activeRoom.furniture.find(f => f.id === id);
     if (!draggedItem) return;
 
     const deltaX = targetX - draggedItem.x;
     const deltaZ = targetZ - draggedItem.z;
-    const deltaRot = newRotation !== undefined ? newRotation - draggedItem.rotation : 0;
+    const deltaRot = (newRotation !== undefined && !isNaN(newRotation)) ? newRotation - draggedItem.rotation : 0;
 
     const idsToUpdate = selectedIds.includes(id) ? selectedIds : [id];
 
@@ -275,6 +277,8 @@ export default function App() {
           nextX = Math.round(nextX / step) * step;
           nextZ = Math.round(nextZ / step) * step;
         }
+
+        if (isNaN(nextX) || isNaN(nextZ)) return item;
 
         return { ...item, x: nextX, z: nextZ, rotation: nextRot };
       }
