@@ -524,6 +524,8 @@ export default function App() {
                       onUpdatePosition={updatePosition}
                       isColliding={collidingIds.has(item.id)}
                       isReadOnly={!isDeveloperMode}
+                      gridSize={editorSettings.gridSize}
+                      snapToGrid={editorSettings.snapToGrid}
                     />
                   ))}
                   <OrbitControls makeDefault minDistance={4} maxDistance={10} maxPolarAngle={Math.PI / 2 - 0.05} />
@@ -725,6 +727,8 @@ export default function App() {
                       onUpdatePosition={updatePosition}
                       isColliding={collidingIds.has(item.id)}
                       isReadOnly={false}
+                      gridSize={editorSettings.gridSize}
+                      snapToGrid={editorSettings.snapToGrid}
                     />
                   ))}
 
