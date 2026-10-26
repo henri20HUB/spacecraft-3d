@@ -29,7 +29,7 @@ const ITEM_DIMENSIONS = {
 
 function checkCollision(itemA, itemB) {
   if (itemA.type === 'poster' || itemB.type === 'poster') return false;
-  if (itemA.type === 'rug' || itemB.type === 'rug') return false; // Rugs never collide with items on top
+  if (itemA.type === 'rug' || itemB.type === 'rug') return false;
 
   const dimA = ITEM_DIMENSIONS[itemA.type] || { width: 1, depth: 1 };
   const dimB = ITEM_DIMENSIONS[itemB.type] || { width: 1, depth: 1 };
@@ -253,35 +253,34 @@ export default function App() {
     setSelectedIds([newItem.id]);
   };
 
-  // Wall Boundary Clamping & Position/Rotation Update
+  // Synchronous Multi-Selection Movement & Rotation Update
   const updatePosition = (id, targetX, targetZ, newRotation) => {
-    const item = activeRoom.furniture.find(f => f.id === id);
-    if (!item) return;
+    const draggedItem = activeRoom.furniture.find(f => f.id === id);
+    if (!draggedItem) return;
 
-    let finalRotation = newRotation !== undefined ? newRotation : item.rotation;
-    finalRotation = (finalRotation + 360) % 360;
+    const deltaX = targetX - draggedItem.x;
+    const deltaZ = targetZ - draggedItem.z;
+    const deltaRot = newRotation !== undefined ? newRotation - draggedItem.rotation : 0;
 
-    const dim = ITEM_DIMENSIONS[item.type] || { width: 1, depth: 1 };
-    const isRotated = Math.round(finalRotation / 90) % 2 !== 0;
-    const w = isRotated ? dim.depth : dim.width;
-    const d = isRotated ? dim.width : dim.depth;
+    const idsToUpdate = selectedIds.includes(id) ? selectedIds : [id];
 
-    // Clamp within room walls so furniture cannot pass through walls
-    const minX = -activeRoom.width / 2 + w / 2;
-    const maxX = activeRoom.width / 2 - w / 2;
-    const minZ = -activeRoom.length / 2 + d / 2;
-    const maxZ = activeRoom.length / 2 - d / 2;
+    const updated = activeRoom.furniture.map(item => {
+      if (idsToUpdate.includes(item.id)) {
+        let nextX = item.x + deltaX;
+        let nextZ = item.z + deltaZ;
+        let nextRot = ((item.rotation || 0) + deltaRot + 360) % 360;
 
-    let finalX = Math.max(minX, Math.min(maxX, targetX));
-    let finalZ = Math.max(minZ, Math.min(maxZ, targetZ));
+        if (editorSettings.snapToGrid && item.type !== 'poster') {
+          const step = editorSettings.gridSize;
+          nextX = Math.round(nextX / step) * step;
+          nextZ = Math.round(nextZ / step) * step;
+        }
 
-    if (editorSettings.snapToGrid && item.type !== 'poster') {
-      const step = editorSettings.gridSize;
-      finalX = Math.round(finalX / step) * step;
-      finalZ = Math.round(finalZ / step) * step;
-    }
+        return { ...item, x: nextX, z: nextZ, rotation: nextRot };
+      }
+      return item;
+    });
 
-    const updated = activeRoom.furniture.map(f => f.id === id ? { ...f, x: finalX, z: finalZ, rotation: finalRotation } : f);
     updateActiveRoom({ furniture: updated });
   };
 

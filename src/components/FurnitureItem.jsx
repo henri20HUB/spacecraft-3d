@@ -25,13 +25,16 @@ export function FurnitureItem({ item, onSelect, isSelected, onUpdatePosition, is
           disableRotation={false}
           axisColors={isColliding ? ['#ef4444', '#ef4444', '#ef4444'] : ['#6366f1', '#10b981', '#06b6d4']}
           onDrag={(matrix) => {
+            const deltaX = matrix.elements[12];
+            const deltaZ = matrix.elements[14];
+
             const position = new THREE.Vector3();
             const rotation = new THREE.Euler();
             const scale = new THREE.Vector3();
             matrix.decompose(position, rotation, scale);
+            const deltaRotDeg = (rotation.y * 180) / Math.PI;
 
-            const newRotationDeg = (item.rotation || 0) + (rotation.y * 180) / Math.PI;
-            onUpdatePosition(item.id, item.x + position.x, item.z + position.z, newRotationDeg);
+            onUpdatePosition(item.id, item.x + deltaX, item.z + deltaZ, (item.rotation || 0) + deltaRotDeg);
           }}
         >
           <group 
