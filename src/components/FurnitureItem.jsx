@@ -15,14 +15,14 @@ export function FurnitureItem({ item, onSelect, isSelected, onUpdatePosition, is
 
   if (!isReadOnly && isSelected) {
     return (
-      <group position={[item.x, 0, item.z]}>
+      <group position={[item.x, 0, item.z]} rotation={[0, rotationRad, 0]}>
         <PivotControls
           activeAxes={[true, false, true]}
           depthTest={false}
           anchor={[0, 0, 0]}
           scale={0.75}
           lineWidth={2.5}
-          disableRotation={true}
+          disableRotation={false}
           axisColors={isColliding ? ['#ef4444', '#ef4444', '#ef4444'] : ['#6366f1', '#10b981', '#06b6d4']}
           onDrag={(matrix) => {
             const position = new THREE.Vector3();
@@ -30,12 +30,11 @@ export function FurnitureItem({ item, onSelect, isSelected, onUpdatePosition, is
             const scale = new THREE.Vector3();
             matrix.decompose(position, rotation, scale);
 
-            // Pass absolute accumulated world offset to App.jsx
-            onUpdatePosition(item.id, item.x + position.x, item.z + position.z);
+            const newRotationDeg = (item.rotation || 0) + (rotation.y * 180) / Math.PI;
+            onUpdatePosition(item.id, item.x + position.x, item.z + position.z, newRotationDeg);
           }}
         >
           <group 
-            rotation={[0, rotationRad, 0]} 
             onClick={handleClick}
             onPointerOver={(e) => { e.stopPropagation(); setHovered(true); }}
             onPointerOut={() => setHovered(false)}

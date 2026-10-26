@@ -1,10 +1,10 @@
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo } from 'react';
 import { Canvas } from '@react-three/fiber';
 import { OrbitControls, Grid, ContactShadows, Environment } from '@react-three/drei';
 import { 
   Box, Maximize2, Trash2, Sparkles, 
-  RotateCw, AlertTriangle, 
-  FolderPlus, Edit3, ArrowLeft, ShieldCheck, Copy, Sliders, CheckSquare, Square, Lock, X, Save, Check
+  AlertTriangle, 
+  FolderPlus, Edit3, ArrowLeft, ShieldCheck, Copy, Sliders, CheckSquare, Square, Lock, X, Save
 } from 'lucide-react';
 
 import { RoomStructure } from './components/RoomStructure';
@@ -29,6 +29,7 @@ const ITEM_DIMENSIONS = {
 
 function checkCollision(itemA, itemB) {
   if (itemA.type === 'poster' || itemB.type === 'poster') return false;
+  if (itemA.type === 'rug' || itemB.type === 'rug') return false; // Rugs never collide with items on top
 
   const dimA = ITEM_DIMENSIONS[itemA.type] || { width: 1, depth: 1 };
   const dimB = ITEM_DIMENSIONS[itemB.type] || { width: 1, depth: 1 };
@@ -72,7 +73,6 @@ export default function App() {
     return localStorage.getItem('spacecraft_secure_dev') === 'true';
   });
 
-  // Custom Modals State
   const [showDevModal, setShowDevModal] = useState(false);
   const [devPasswordInput, setDevPasswordInput] = useState('');
   const [devModalError, setDevModalError] = useState(false);
@@ -253,28 +253,35 @@ export default function App() {
     setSelectedIds([newItem.id]);
   };
 
-  const updatePosition = (id, targetX, targetZ) => {
-    let finalX = targetX;
-    let finalZ = targetZ;
+  // Wall Boundary Clamping & Position/Rotation Update
+  const updatePosition = (id, targetX, targetZ, newRotation) => {
+    const item = activeRoom.furniture.find(f => f.id === id);
+    if (!item) return;
 
-    if (editorSettings.snapToGrid) {
+    let finalRotation = newRotation !== undefined ? newRotation : item.rotation;
+    finalRotation = (finalRotation + 360) % 360;
+
+    const dim = ITEM_DIMENSIONS[item.type] || { width: 1, depth: 1 };
+    const isRotated = Math.round(finalRotation / 90) % 2 !== 0;
+    const w = isRotated ? dim.depth : dim.width;
+    const d = isRotated ? dim.width : dim.depth;
+
+    // Clamp within room walls so furniture cannot pass through walls
+    const minX = -activeRoom.width / 2 + w / 2;
+    const maxX = activeRoom.width / 2 - w / 2;
+    const minZ = -activeRoom.length / 2 + d / 2;
+    const maxZ = activeRoom.length / 2 - d / 2;
+
+    let finalX = Math.max(minX, Math.min(maxX, targetX));
+    let finalZ = Math.max(minZ, Math.min(maxZ, targetZ));
+
+    if (editorSettings.snapToGrid && item.type !== 'poster') {
       const step = editorSettings.gridSize;
-      finalX = Math.round(targetX / step) * step;
-      finalZ = Math.round(targetZ / step) * step;
+      finalX = Math.round(finalX / step) * step;
+      finalZ = Math.round(finalZ / step) * step;
     }
 
-    const updated = activeRoom.furniture.map(item => item.id === id ? { ...item, x: finalX, z: finalZ } : item);
-    updateActiveRoom({ furniture: updated });
-  };
-
-  const rotateSelected = () => {
-    if (selectedIds.length === 0) return;
-    const updated = activeRoom.furniture.map(item => {
-      if (selectedIds.includes(item.id)) {
-        return { ...item, rotation: ((item.rotation || 0) + 45) % 360 };
-      }
-      return item;
-    });
+    const updated = activeRoom.furniture.map(f => f.id === id ? { ...f, x: finalX, z: finalZ, rotation: finalRotation } : f);
     updateActiveRoom({ furniture: updated });
   };
 
@@ -473,9 +480,6 @@ export default function App() {
 
                   {selectedIds.length > 0 && (
                     <div className="space-y-2 pt-2 border-t border-slate-800">
-                      <button onClick={rotateSelected} className="w-full bg-slate-900 hover:bg-slate-800 text-slate-200 border border-slate-800 py-2 rounded-xl text-xs font-semibold flex items-center justify-center gap-1.5">
-                        <RotateCw className="w-3.5 h-3.5 text-cyan-400" /> Snap Rotate 45°
-                      </button>
                       <button onClick={deleteSelected} className="w-full bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-900/30 py-2 rounded-xl text-xs font-semibold flex items-center justify-center gap-1.5">
                         <Trash2 className="w-3.5 h-3.5" /> Remove
                       </button>
@@ -504,7 +508,6 @@ export default function App() {
                   <directionalLight position={[5, 8, 5]} intensity={1.2} castShadow={editorSettings.shadowsEnabled} shadow-bias={-0.0001} />
                   <Environment preset="apartment" />
                   
-                  {/* Full-viewer background grid */}
                   <Grid position={[0, 0.001, 0]} args={[12, 12]} cellSize={0.5} cellThickness={0.8} cellColor="#94a3b8" sectionSize={1} sectionThickness={1.2} sectionColor="#64748b" />
                   
                   <RoomStructure room={activeShowcase} gridSize={editorSettings.gridSize} showRoomGrid={editorSettings.showRoomGrid} />
@@ -683,10 +686,7 @@ export default function App() {
                   <div className="bg-indigo-950/20 border border-indigo-900/50 rounded-2xl p-5 space-y-4">
                     <span className="text-xs font-bold uppercase tracking-wider text-indigo-400">{selectedIds.length} item(s) selected</span>
                     <div className="flex gap-2">
-                      <button onClick={rotateSelected} className="flex-1 bg-slate-900 hover:bg-slate-800 text-slate-200 border border-slate-800 py-2.5 rounded-xl text-xs font-semibold flex items-center justify-center gap-1.5">
-                        <RotateCw className="w-3.5 h-3.5 text-cyan-400" /> Snap Rotate 45°
-                      </button>
-                      <button onClick={deleteSelected} className="flex-1 bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-900/30 py-2.5 rounded-xl text-xs font-semibold flex items-center justify-center gap-1.5">
+                      <button onClick={deleteSelected} className="w-full bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-900/30 py-2.5 rounded-xl text-xs font-semibold flex items-center justify-center gap-1.5">
                         <Trash2 className="w-3.5 h-3.5" /> Remove
                       </button>
                     </div>
