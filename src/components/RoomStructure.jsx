@@ -117,7 +117,6 @@ export function RoomStructure({ room, gridSize = 0.25, showRoomGrid = false }) {
             </mesh>
 
             {/* Window Frame */}
-            <mesh position={[0, 0, 0]></mesh>
             <mesh position={[0, 0, 0]}>
               <boxGeometry args={[windowWidth + 0.04, windowHeight + 0.04, 0.06]} />
               <meshStandardMaterial color="#0f172a" roughness={0.4} />
