@@ -72,12 +72,10 @@ export default function App() {
     return localStorage.getItem('spacecraft_secure_dev') === 'true';
   });
 
-  // Custom Developer Password Modal State
   const [showDevModal, setShowDevModal] = useState(false);
   const [devPasswordInput, setDevPasswordInput] = useState('');
   const [devModalError, setDevModalError] = useState(false);
 
-  // Workspace Router Settings (Sidebar)
   const [editorSettings, setEditorSettings] = useState({
     snapToGrid: true,
     gridSize: 0.25,
@@ -240,15 +238,15 @@ export default function App() {
     setSelectedIds([newItem.id]);
   };
 
-  // Permanent Position Update with Grid Snapping
-  const updatePosition = (id, targetX, targetZ) => {
-    let finalX = targetX;
-    let finalZ = targetZ;
+  // Fixed absolute position update with grid snapping
+  const updatePosition = (id, absoluteX, absoluteZ) => {
+    let finalX = absoluteX;
+    let finalZ = absoluteZ;
 
     if (editorSettings.snapToGrid) {
       const step = editorSettings.gridSize;
-      finalX = Math.round(targetX / step) * step;
-      finalZ = Math.round(targetZ / step) * step;
+      finalX = Math.round(absoluteX / step) * step;
+      finalZ = Math.round(absoluteZ / step) * step;
     }
 
     const updated = activeRoom.furniture.map(item => item.id === id ? { ...item, x: finalX, z: finalZ } : item);
@@ -378,7 +376,6 @@ export default function App() {
             </div>
 
             <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-              {/* Developer Toolbar (Only visible when Dev Mode is active) */}
               {isDeveloperMode && (
                 <div className="lg:col-span-3 bg-slate-950 border border-amber-500/30 rounded-2xl p-5 space-y-4">
                   <div className="flex items-center justify-between">
@@ -425,20 +422,14 @@ export default function App() {
                   <ambientLight intensity={0.7} />
                   <directionalLight position={[5, 8, 5]} intensity={1.2} castShadow={editorSettings.shadowsEnabled} shadow-bias={-0.0001} />
                   <Environment preset="apartment" />
-                  <RoomStructure room={activeShowcase} />
-                  {editorSettings.showGridLines && (
-                    <Grid position={[0, 0.001, 0]} args={[12, 12]} cellSize={0.5} cellThickness={0.8} cellColor="#94a3b8" sectionSize={1} sectionThickness={1.2} sectionColor="#64748b" />
-                  )}
+                  <RoomStructure room={activeShowcase} gridSize={editorSettings.gridSize} />
                   {activeShowcase.furniture.map(item => (
                     <FurnitureItem 
                       key={item.id} 
                       item={item} 
                       onSelect={handleSelect} 
                       isSelected={isDeveloperMode && selectedIds.includes(item.id)} 
-                      onUpdatePosition={(id, x, z) => {
-                        const itemObj = activeShowcase.furniture.find(f => f.id === id);
-                        updatePosition(id, itemObj.x + x, itemObj.z + z);
-                      }}
+                      onUpdatePosition={updatePosition}
                       isColliding={collidingIds.has(item.id)}
                       isReadOnly={!isDeveloperMode}
                     />
@@ -458,7 +449,6 @@ export default function App() {
                   </p>
 
                   <div className="space-y-3 pt-2 border-t border-slate-800">
-                    {/* Snap to Grid */}
                     <div className="flex items-center justify-between cursor-pointer" onClick={() => setEditorSettings(s => ({ ...s, snapToGrid: !s.snapToGrid }))}>
                       <div>
                         <span className="text-xs font-semibold text-slate-200 block">Snap to Grid</span>
@@ -467,7 +457,6 @@ export default function App() {
                       {editorSettings.snapToGrid ? <CheckSquare className="w-4 h-4 text-cyan-400" /> : <Square className="w-4 h-4 text-slate-600" />}
                     </div>
 
-                    {/* Snap Precision Buttons */}
                     {editorSettings.snapToGrid && (
                       <div className="space-y-1 pl-2">
                         <label className="text-[10px] text-slate-400 block">Snapping Precision</label>
@@ -485,13 +474,6 @@ export default function App() {
                       </div>
                     )}
 
-                    {/* Show Grid Lines */}
-                    <div className="flex items-center justify-between cursor-pointer pt-2 border-t border-slate-800/80" onClick={() => setEditorSettings(s => ({ ...s, showGridLines: !s.showGridLines }))}>
-                      <span className="text-xs font-semibold text-slate-200">Show Floor Grid</span>
-                      {editorSettings.showGridLines ? <CheckSquare className="w-4 h-4 text-cyan-400" /> : <Square className="w-4 h-4 text-slate-600" />}
-                    </div>
-
-                    {/* Real-time Shadows */}
                     <div className="flex items-center justify-between cursor-pointer pt-2 border-t border-slate-800/80" onClick={() => setEditorSettings(s => ({ ...s, shadowsEnabled: !s.shadowsEnabled }))}>
                       <span className="text-xs font-semibold text-slate-200">Real-time Shadows</span>
                       {editorSettings.shadowsEnabled ? <CheckSquare className="w-4 h-4 text-cyan-400" /> : <Square className="w-4 h-4 text-slate-600" />}
@@ -532,7 +514,7 @@ export default function App() {
                   <Canvas camera={{ position: [0, 4, 6], fov: 45 }}>
                     <ambientLight intensity={0.7} />
                     <directionalLight position={[5, 8, 5]} intensity={1} />
-                    <RoomStructure room={room} />
+                    <RoomStructure room={room} gridSize={0.25} />
                     {room.furniture.map(item => (<FurnitureItem key={item.id} item={item} isReadOnly={true} />))}
                     <OrbitControls makeDefault enableZoom={false} maxPolarAngle={Math.PI / 2 - 0.05} />
                   </Canvas>
@@ -633,10 +615,7 @@ export default function App() {
                   <Environment preset="apartment" />
                   <ContactShadows position={[0, 0.01, 0]} opacity={0.6} scale={12} blur={1.5} far={4} />
 
-                  <RoomStructure room={activeRoom} />
-                  {editorSettings.showGridLines && (
-                    <Grid position={[0, 0.001, 0]} args={[12, 12]} cellSize={0.5} cellThickness={0.8} cellColor="#94a3b8" sectionSize={1} sectionThickness={1.2} sectionColor="#64748b" />
-                  )}
+                  <RoomStructure room={activeRoom} gridSize={editorSettings.gridSize} />
 
                   {activeRoom.furniture.map(item => (
                     <FurnitureItem 
@@ -644,10 +623,7 @@ export default function App() {
                       item={item} 
                       onSelect={handleSelect} 
                       isSelected={selectedIds.includes(item.id)} 
-                      onUpdatePosition={(id, x, z) => {
-                        const itemObj = activeRoom.furniture.find(f => f.id === id);
-                        updatePosition(id, itemObj.x + x, itemObj.z + z);
-                      }}
+                      onUpdatePosition={updatePosition}
                       isColliding={collidingIds.has(item.id)}
                       isReadOnly={false}
                     />
@@ -663,11 +639,10 @@ export default function App() {
                   <Sliders className="w-4 h-4" /> Workspace Router
                 </div>
                 <p className="text-[11px] text-slate-400 leading-relaxed">
-                  Configure snapping rules, grid precision, and real-time viewport rendering options.
+                  Configure snapping rules, grid precision, and real-time viewport options.
                 </p>
 
                 <div className="space-y-4 pt-2 border-t border-slate-800">
-                  {/* Grid Snapping Toggle */}
                   <div className="flex items-center justify-between cursor-pointer" onClick={() => setEditorSettings(s => ({ ...s, snapToGrid: !s.snapToGrid }))}>
                     <div className="space-y-0.5">
                       <span className="text-xs font-semibold text-slate-200 block">Snap to Grid</span>
@@ -676,7 +651,6 @@ export default function App() {
                     {editorSettings.snapToGrid ? <CheckSquare className="w-4 h-4 text-cyan-400" /> : <Square className="w-4 h-4 text-slate-600" />}
                   </div>
 
-                  {/* Grid Size Increment Selector */}
                   {editorSettings.snapToGrid && (
                     <div className="space-y-1.5 pl-2">
                       <label className="text-[10px] text-slate-400 block">Snap Precision (m)</label>
@@ -694,13 +668,6 @@ export default function App() {
                     </div>
                   )}
 
-                  {/* Show Floor Grid */}
-                  <div className="flex items-center justify-between cursor-pointer pt-2 border-t border-slate-800/80" onClick={() => setEditorSettings(s => ({ ...s, showGridLines: !s.showGridLines }))}>
-                    <span className="text-xs font-semibold text-slate-200">Show Floor Grid</span>
-                    {editorSettings.showGridLines ? <CheckSquare className="w-4 h-4 text-cyan-400" /> : <Square className="w-4 h-4 text-slate-600" />}
-                  </div>
-
-                  {/* Real-time Shadows */}
                   <div className="flex items-center justify-between cursor-pointer pt-2 border-t border-slate-800/80" onClick={() => setEditorSettings(s => ({ ...s, shadowsEnabled: !s.shadowsEnabled }))}>
                     <span className="text-xs font-semibold text-slate-200">Real-time Shadows</span>
                     {editorSettings.shadowsEnabled ? <CheckSquare className="w-4 h-4 text-cyan-400" /> : <Square className="w-4 h-4 text-slate-600" />}

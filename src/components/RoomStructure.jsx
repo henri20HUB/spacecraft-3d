@@ -1,7 +1,7 @@
 import React, { useMemo } from 'react';
 import * as THREE from 'three';
 
-export function RoomStructure({ room }) {
+export function RoomStructure({ room, gridSize = 0.25 }) {
   const wallHeight = 2.4;
   const wallThickness = 0.12;
   const { width, length, hasWindow, windowWidth = 1.6, windowHeight = 1.2 } = room;
@@ -9,7 +9,7 @@ export function RoomStructure({ room }) {
   // Generate procedural plank groove lines for realistic wood flooring detail
   const plankGrooves = useMemo(() => {
     const lines = [];
-    const plankWidth = 0.2; // Width of each wood plank
+    const plankWidth = 0.2;
     for (let x = -width / 2 + plankWidth; x < width / 2; x += plankWidth) {
       lines.push(
         <lineSegments key={`plank-${x}`}>
@@ -32,7 +32,7 @@ export function RoomStructure({ room }) {
       <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.005, 0]} receiveShadow>
         <planeGeometry args={[width, length]} />
         <meshStandardMaterial 
-          color="#9e6f47" /* Rich warm dark walnut/oak */
+          color="#9e6f47" 
           roughness={0.45} 
           metalness={0.03} 
           side={THREE.FrontSide}
@@ -41,6 +41,14 @@ export function RoomStructure({ room }) {
 
       {/* Individual Plank Line Details */}
       {plankGrooves}
+
+      {/* Dynamic Visual Snapping Grid Overlay */}
+      <gridHelper 
+        args={[Math.max(width, length), Math.max(width, length) / gridSize, '#38bdf8', '#334155']} 
+        position={[0, 0.008, 0]} 
+        material-transparent={true}
+        material-opacity={0.35}
+      />
 
       {/* Baseboard Rim */}
       <mesh position={[0, -0.05, 0]}>
